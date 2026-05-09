@@ -144,6 +144,34 @@ test('public API exports the M2 digest tools', () => {
   assert.equal(agent.digest_show.name, 'digest_show');
 });
 
+test('public API exports all 18 M2 periscope tools', () => {
+  const names = [
+    'periscope_status',
+    'periscope_formation_list',
+    'periscope_formation_describe',
+    'periscope_formation_lint',
+    'periscope_audit',
+    'periscope_reconcile',
+    'periscope_tier_list',
+    'periscope_tier_describe',
+    'periscope_tier_cursor',
+    'periscope_snapshot_list',
+    'periscope_snapshot_get',
+    'periscope_pool_list',
+    'periscope_sentinels_list',
+    'periscope_events_list',
+    'periscope_catalog_metadata',
+    'periscope_catalog_tree',
+    'periscope_droplet_locate',
+    'periscope_droplet_residual',
+  ];
+  for (const n of names) {
+    const t = (agent as Record<string, unknown>)[n] as { name: string };
+    assert.equal(t?.name, n);
+  }
+  assert.equal(agent.periscopeTools.length, 18);
+});
+
 test('public API exports the SQL client helper', () => {
   assert.equal(typeof agent.executeSQL, 'function');
   assert.equal(typeof agent.sqlRowToColumns, 'function');
@@ -163,6 +191,7 @@ test('public API exports the per-domain catalogs + tenantTools aggregator', () =
   assert.ok(Array.isArray(agent.queryTools));
   assert.ok(Array.isArray(agent.relayTools));
   assert.ok(Array.isArray(agent.digestTools));
+  assert.ok(Array.isArray(agent.periscopeTools));
   assert.ok(Array.isArray(agent.tenantTools));
   // Names that must appear in the aggregated table.
   const names = agent.tenantTools.map((t) => t.name);
@@ -187,6 +216,9 @@ test('public API exports the per-domain catalogs + tenantTools aggregator', () =
     'relay_queue', 'relay_status', 'relay_inspect', 'relay_logs',
     'relay_tree', 'relay_entity',
     'digest_list', 'digest_show',
+    'periscope_status', 'periscope_formation_list', 'periscope_tier_list',
+    'periscope_audit', 'periscope_reconcile', 'periscope_snapshot_list',
+    'periscope_pool_list', 'periscope_droplet_locate',
   ]) {
     assert.ok(names.includes(n), `tenantTools must include ${n}`);
   }

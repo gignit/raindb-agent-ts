@@ -23,6 +23,7 @@ import { formationTools } from './formation.js';
 import { keyTools } from './key.js';
 import { llmTools } from './llm.js';
 import { marketplaceTools } from './marketplace.js';
+import { periscopeTools } from './periscope.js';
 import { queryTools } from './query.js';
 import { relayTools } from './relay.js';
 import { usageTools } from './usage.js';
@@ -159,6 +160,27 @@ export {
   type ActionStage,
   type DigestEntityStatus,
 } from './digest.js';
+export {
+  periscope_status,
+  periscope_formation_list,
+  periscope_formation_describe,
+  periscope_formation_lint,
+  periscope_audit,
+  periscope_reconcile,
+  periscope_tier_list,
+  periscope_tier_describe,
+  periscope_tier_cursor,
+  periscope_snapshot_list,
+  periscope_snapshot_get,
+  periscope_pool_list,
+  periscope_sentinels_list,
+  periscope_events_list,
+  periscope_catalog_metadata,
+  periscope_catalog_tree,
+  periscope_droplet_locate,
+  periscope_droplet_residual,
+  periscopeTools,
+} from './periscope.js';
 
 /**
  * The full tenant tool table. Mirrors the Go aggregator's order so
@@ -176,7 +198,7 @@ export const tenantTools: RegisteredTool[] = [
   ...queryTools, // sql_execute + vector_search (Go's "sqlTools")
   ...formationTools,
   ...cacheTools,
-  // periscopeTools -- M2 pending (17 tools)
+  ...periscopeTools,
   ...keyTools,
   ...configTools,
   ...usageTools,

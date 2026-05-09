@@ -16,7 +16,7 @@
  * not exported -- they can iterate freely between releases.
  */
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.4.0';
 
 // === Agent runtime ===
 export { runAgent } from './loop/index.js';
@@ -208,6 +208,27 @@ export {
   digestTools,
   type ActionStage,
   type DigestEntityStatus,
+
+  // Periscope (17 tools, all read-only)
+  periscope_status,
+  periscope_formation_list,
+  periscope_formation_describe,
+  periscope_formation_lint,
+  periscope_audit,
+  periscope_reconcile,
+  periscope_tier_list,
+  periscope_tier_describe,
+  periscope_tier_cursor,
+  periscope_snapshot_list,
+  periscope_snapshot_get,
+  periscope_pool_list,
+  periscope_sentinels_list,
+  periscope_events_list,
+  periscope_catalog_metadata,
+  periscope_catalog_tree,
+  periscope_droplet_locate,
+  periscope_droplet_residual,
+  periscopeTools,
 
   // Aggregated
   tenantTools,

@@ -2,6 +2,19 @@
 
 ## M2 progress log (newest first)
 
+**Batch 4 landed (2026-05-09)** -- periscope. Tagged v0.4.0. **M2 COMPLETE.**
+
+  - **Periscope** (G): all 18 read-only tools (status, formation_list/describe/lint, audit, reconcile, tier_list/describe/cursor, snapshot_list/get, pool_list, sentinels_list, events_list, catalog_metadata, catalog_tree, droplet_locate/residual). Note: the M2 checklist seed initially counted 17 -- the Go side actually returns 18 from tenantPeriscopeTools (lint was tracked under the formation block in early drafts; it's a separate tool entry).
+
+  Total batch 4: 18 new tools across 1 domain; 30 new unit tests; package now ships 70 of 70 tools (100% of non-deferred). fdn-app integration unchanged (all periscope tools are operator-tier).
+
+**Final M2 tally**:
+  - 70 tools shipped (M1: 2 pilots; M2 batches 1-4: 68 tools)
+  - 3 tools deferred (filesystem-bound: pack_install, droplet_upload, droplet_download)
+  - 161 unit tests across 13 test files; all passing
+  - 14 domain catalogs + tenantTools aggregator
+  - fdn-app's lifter selects 9 tools per AGENT_TOOL_PARITY.md (all P0 marketplace + P1 formation introspection + droplet_create pilot); the rest stay package-only for raindb-app's M3 portal
+
 **Batch 3 landed (2026-05-09)** -- catalog + query (sql/vector) + relay + digest. Tagged v0.3.0.
 
   - **Catalog** (E): catalog_list, catalog_tree, catalog_insert, catalog_update, catalog_delete, catalog_transfer. All 6 ported.
