@@ -2,19 +2,84 @@
  * @raindb/agent -- shared TypeScript agent runtime + tool catalog
  * for the RainDB ecosystem.
  *
- * This file is the public API surface of the package. Consumers
- * (fdn-app, raindb-app) bind to these exports; changing them is a
- * breaking change. Everything else under src/ is internal.
+ * Two consumers: fdn-app (the FDN portal) and raindb-app (the
+ * RainDB platform portal). Both import the same agent runtime,
+ * the same tenant tool table, and the same system-prompt scaffold
+ * so the agent surface stays in lockstep across the two products.
  *
- * The package is empty in v0.1.0-pre. Milestone 1 will land:
- *   - runAgent (extracted from fdn-app/server/src/services/agentLoop.ts)
- *   - RegisteredTool, ToolContext, ToolRole, GraphQLOptions
- *   - buildToolDefs, augmentDescription
- *   - buildSystemPrompt
- *   - pack_list (read-only reference tool)
- *   - droplet_create (mutating reference tool)
+ * The Go agent in raindb-phoenix-oc/internal/ai/ is the reference
+ * implementation. This package is its TypeScript mirror. When the
+ * two diverge, the Go side wins.
  *
- * See README.md for the full plan + the agent's operating manual.
+ * THIS FILE IS THE PUBLIC API. Hosts bind to these exports;
+ * changing them is a breaking change. Internals under src/ are
+ * not exported -- they can iterate freely between releases.
  */
 
-export const VERSION = '0.1.0-pre';
+export const VERSION = '0.1.0';
+
+// === Agent runtime ===
+export { runAgent } from './loop/index.js';
+export type {
+  RunAgentOptions,
+  AgentResult,
+} from './loop/index.js';
+
+// === Registry primitives + types ===
+export type {
+  RegisteredTool,
+  ToolContext,
+  ToolRole,
+  ToolArgs,
+  ToolFn,
+  ToolParameters,
+  ToolProperty,
+  ToolEvent,
+  ToolConfirmFn,
+  AgentEvent,
+  GraphQLOptions,
+} from './registry/types.js';
+
+export {
+  buildToolDefs,
+  defaultRoleAllows,
+  findTool,
+  toChatTool,
+  // arg helpers (re-exported for tool authors composing their own)
+  stringArg,
+  intArg,
+  boolArg,
+  stringSliceArg,
+  objectArg,
+} from './registry/build.js';
+
+// === System prompt scaffold ===
+export {
+  buildSystemPrompt,
+} from './prompts/system.js';
+export type {
+  SystemPromptOptions,
+  SystemPromptBase,
+} from './prompts/system.js';
+
+// === Clients (escape hatch for advanced hosts) ===
+export {
+  executeGraphQL,
+  RaindbError,
+} from './client/graphql.js';
+export {
+  makeRaindbAiClient,
+  resolveDefaultModel,
+  resolveDefaultChatModel,
+} from './client/raindbAi.js';
+
+// === Per-domain tool catalogs ===
+export {
+  pack_list,
+  droplet_create,
+  marketplaceTools,
+  dropletTools,
+  tenantTools,
+  type PackSummary,
+  type WriteResult,
+} from './tools/index.js';
