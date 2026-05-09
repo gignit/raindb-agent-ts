@@ -60,18 +60,28 @@ reference implementation. This package is a TypeScript mirror.
 
 ---
 
-## Status: scaffold in place, ready for Milestone 1
+## Status: Milestone 1 done -- ready for live verification + M2 bulk port
 
 | Component | State |
 |---|---|
 | `package.json`, `tsconfig.json`, `tsconfig.test.json`, `.gitignore` | Done |
-| `src/index.ts` (placeholder, exports `VERSION`) | Done |
-| `test/unit/smoke.test.ts` (verifies the export) | Done |
+| `src/index.ts` (full public API) | Done |
+| `test/unit/{smoke,pack_list,droplet_create,loop}.test.ts` (23 tests) | Done |
 | `npm install`, `npm run typecheck`, `npm run build`, `npm run test` | All clean |
-| `runAgent`, types, GraphQL client, openai client | **Pending Milestone 1** |
-| Tool implementations | **Pending Milestone 1 (2 tools), Milestone 2 (~68 tools)** |
-| fdn-app consumption | **Pending Milestone 1+2** |
+| `runAgent`, types, GraphQL client, openai client, registry helpers, system-prompt scaffold | Done (M1) |
+| Pilot tools `pack_list` + `droplet_create` | Done (M1) |
+| fdn-app consumption (file: dep + adapter) | Done (M1) |
+| Live verification in fdn-app UI against test-tenant | **Next -- before M2** |
+| Remaining ~68 tool implementations | **Pending Milestone 2** |
 | raindb-app consumption | **Pending Milestone 3** |
+
+**v0.1.0 tagged.** Commit `0b4dc35`.
+
+fdn-app now imports the two pilot tools via `file:../../raindb-agent-ts`.
+At runtime `ALL_TOOLS` has 15 entries: 13 fdn-app product tools +
+2 shared (`pack_list` at minRole=`read`, `droplet_create` at
+minRole=`update`). The role adapter is in
+`fdn-app/server/src/services/agentToolsShared.ts`.
 
 The toolchain matches `fdn-app/server` exactly: TypeScript 5.6,
 Node 20, ESM, `module: NodeNext`, `node --test` runner with
