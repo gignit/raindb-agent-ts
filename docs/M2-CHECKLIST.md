@@ -2,6 +2,27 @@
 
 ## M2 progress log (newest first)
 
+**Batch 3 landed (2026-05-09)** -- catalog + query (sql/vector) + relay + digest. Tagged v0.3.0.
+
+  - **Catalog** (E): catalog_list, catalog_tree, catalog_insert, catalog_update, catalog_delete, catalog_transfer. All 6 ported.
+  - **Query** (F): sql_execute, vector_search. sql_execute has a SELECT-only guard that the Go side doesn't (LLM should not write data via SQL; rejects DDL/DML keywords client-side).
+  - **Relay** (H): relay_queue, relay_status, relay_inspect, relay_logs, relay_tree, relay_entity. relay_queue + relay_entity walk listKeys directly (mirrors Go ops); the others use readRelay GraphQL.
+  - **Digest** (I): digest_list, digest_show. Mirrors Go's SynthesizeActionStatus walker -- listDroplets to enumerate entities, listKeys per entity to find root relays, readRelay tree to project stages with start/complete/duration. Generic walker; action-type-specific walkers can land later.
+
+  Total batch 3: 16 new tools across 4 domains; 34 new unit tests; package now ships 52 of ~70 tools (~74%). fdn-app integration unchanged (none of these tools are appropriate for the product surface per AGENT_TOOL_PARITY.md).
+
+**M2 remaining**: periscope (17 tools, all read-only) + droplet_upload/download (deferred per filesystem note).
+
+**Batch 2 landed (2026-05-09)** -- droplet read-side + entity + key + llm + usage. Tagged v0.2.0.
+
+  - **Droplet** (B): 9 tools (M1's droplet_create + read-side 5 + remaining mutating 3 + bulk 2). droplet_upload + droplet_download deferred.
+  - **Entity** (C): all 6 lifecycle tools.
+  - **Key** (M): all 3 (key_list, key_create, key_revoke).
+  - **LLM** (K): all 3 tenant-scoped (llm_provider_list, llm_model_list, llm_usage_report_summary).
+  - **Usage** (L): both tenant-scoped (usage_list, usage_summary).
+
+  Total batch 2: 25 new tools; 43 new unit tests.
+
 **Batch 1 landed (2026-05-09)** -- read-heavy low-risk domains, fully tested + lifted into fdn-app:
 
   - **Marketplace** (J): pack_info, pack_get, pack_features, vendor_list, vendor_info ported. pack_install deferred (filesystem-bound CLI primitive). Marketplace surface now complete except pack_install.

@@ -16,7 +16,7 @@
  * not exported -- they can iterate freely between releases.
  */
 
-export const VERSION = '0.2.0';
+export const VERSION = '0.3.0';
 
 // === Agent runtime ===
 export { runAgent } from './loop/index.js';
@@ -166,6 +166,48 @@ export {
   llm_usage_report_summary,
   llmTools,
   type LLMUsageReportRow,
+
+  // Catalog
+  catalog_list,
+  catalog_tree,
+  catalog_insert,
+  catalog_update,
+  catalog_delete,
+  catalog_transfer,
+  catalogTools,
+  type CatalogMutationResult,
+  type CatalogTransferResult,
+  type CatalogListResult,
+  type CatalogTreeNode,
+
+  // Query (sql + vector)
+  sql_execute,
+  vector_search,
+  queryTools,
+  type VectorSearchHit,
+  type VectorSearchResult,
+
+  // Relay
+  relay_queue,
+  relay_status,
+  relay_inspect,
+  relay_logs,
+  relay_tree,
+  relay_entity,
+  relayTools,
+  type RelayAddress,
+  type RelayLogEntry,
+  type RelayResult,
+  type RelayStatusSummary,
+  type RelayInspectView,
+  type RelayQueueEntry,
+
+  // Digest
+  digest_list,
+  digest_show,
+  digestTools,
+  type ActionStage,
+  type DigestEntityStatus,
 
   // Aggregated
   tenantTools,

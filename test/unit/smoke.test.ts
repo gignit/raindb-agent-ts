@@ -106,6 +106,44 @@ test('public API exports the M2 key + usage + llm tools', () => {
   assert.equal(agent.llm_usage_report_summary.name, 'llm_usage_report_summary');
 });
 
+test('public API exports the M2 catalog tools', () => {
+  for (const n of [
+    'catalog_list',
+    'catalog_tree',
+    'catalog_insert',
+    'catalog_update',
+    'catalog_delete',
+    'catalog_transfer',
+  ]) {
+    const t = (agent as Record<string, unknown>)[n] as { name: string };
+    assert.equal(t?.name, n);
+  }
+});
+
+test('public API exports the M2 query (sql + vector) tools', () => {
+  assert.equal(agent.sql_execute.name, 'sql_execute');
+  assert.equal(agent.vector_search.name, 'vector_search');
+});
+
+test('public API exports the M2 relay tools', () => {
+  for (const n of [
+    'relay_queue',
+    'relay_status',
+    'relay_inspect',
+    'relay_logs',
+    'relay_tree',
+    'relay_entity',
+  ]) {
+    const t = (agent as Record<string, unknown>)[n] as { name: string };
+    assert.equal(t?.name, n);
+  }
+});
+
+test('public API exports the M2 digest tools', () => {
+  assert.equal(agent.digest_list.name, 'digest_list');
+  assert.equal(agent.digest_show.name, 'digest_show');
+});
+
 test('public API exports the SQL client helper', () => {
   assert.equal(typeof agent.executeSQL, 'function');
   assert.equal(typeof agent.sqlRowToColumns, 'function');
@@ -121,6 +159,10 @@ test('public API exports the per-domain catalogs + tenantTools aggregator', () =
   assert.ok(Array.isArray(agent.keyTools));
   assert.ok(Array.isArray(agent.usageTools));
   assert.ok(Array.isArray(agent.llmTools));
+  assert.ok(Array.isArray(agent.catalogTools));
+  assert.ok(Array.isArray(agent.queryTools));
+  assert.ok(Array.isArray(agent.relayTools));
+  assert.ok(Array.isArray(agent.digestTools));
   assert.ok(Array.isArray(agent.tenantTools));
   // Names that must appear in the aggregated table.
   const names = agent.tenantTools.map((t) => t.name);
@@ -139,6 +181,12 @@ test('public API exports the per-domain catalogs + tenantTools aggregator', () =
     'key_list', 'key_create', 'key_revoke',
     'usage_list', 'usage_summary',
     'llm_provider_list', 'llm_model_list', 'llm_usage_report_summary',
+    'catalog_list', 'catalog_tree', 'catalog_insert', 'catalog_update',
+    'catalog_delete', 'catalog_transfer',
+    'sql_execute', 'vector_search',
+    'relay_queue', 'relay_status', 'relay_inspect', 'relay_logs',
+    'relay_tree', 'relay_entity',
+    'digest_list', 'digest_show',
   ]) {
     assert.ok(names.includes(n), `tenantTools must include ${n}`);
   }

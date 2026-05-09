@@ -14,13 +14,17 @@
 // model sees a stable surface across Go + TS.
 
 import { cacheTools } from './cache.js';
+import { catalogTools } from './catalog.js';
 import { configTools } from './config.js';
+import { digestTools } from './digest.js';
 import { dropletTools } from './droplet.js';
 import { entityTools } from './entity.js';
 import { formationTools } from './formation.js';
 import { keyTools } from './key.js';
 import { llmTools } from './llm.js';
 import { marketplaceTools } from './marketplace.js';
+import { queryTools } from './query.js';
+import { relayTools } from './relay.js';
 import { usageTools } from './usage.js';
 
 import type { RegisteredTool } from '../registry/types.js';
@@ -113,6 +117,48 @@ export {
   llmTools,
   type LLMUsageReportRow,
 } from './llm.js';
+export {
+  catalog_list,
+  catalog_tree,
+  catalog_insert,
+  catalog_update,
+  catalog_delete,
+  catalog_transfer,
+  catalogTools,
+  type CatalogMutationResult,
+  type CatalogTransferResult,
+  type CatalogListResult,
+  type CatalogTreeNode,
+} from './catalog.js';
+export {
+  sql_execute,
+  vector_search,
+  queryTools,
+  type VectorSearchHit,
+  type VectorSearchResult,
+} from './query.js';
+export {
+  relay_queue,
+  relay_status,
+  relay_inspect,
+  relay_logs,
+  relay_tree,
+  relay_entity,
+  relayTools,
+  type RelayAddress,
+  type RelayLogEntry,
+  type RelayResult,
+  type RelayStatusSummary,
+  type RelayInspectView,
+  type RelayQueueEntry,
+} from './relay.js';
+export {
+  digest_list,
+  digest_show,
+  digestTools,
+  type ActionStage,
+  type DigestEntityStatus,
+} from './digest.js';
 
 /**
  * The full tenant tool table. Mirrors the Go aggregator's order so
@@ -125,17 +171,17 @@ export {
  */
 export const tenantTools: RegisteredTool[] = [
   ...dropletTools,
-  // catalogTools   -- M2 pending
+  ...catalogTools,
   ...entityTools,
-  // sqlTools       -- M2 pending (sql_execute, vector_search)
+  ...queryTools, // sql_execute + vector_search (Go's "sqlTools")
   ...formationTools,
   ...cacheTools,
   // periscopeTools -- M2 pending (17 tools)
   ...keyTools,
   ...configTools,
   ...usageTools,
-  // relayTools     -- M2 pending
-  // digestTools    -- M2 pending
+  ...relayTools,
+  ...digestTools,
   ...llmTools,
   ...marketplaceTools,
 ];
