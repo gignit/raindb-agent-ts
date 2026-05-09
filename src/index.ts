@@ -16,7 +16,7 @@
  * not exported -- they can iterate freely between releases.
  */
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 // === Agent runtime ===
 export { runAgent } from './loop/index.js';
@@ -68,6 +68,11 @@ export {
   RaindbError,
 } from './client/graphql.js';
 export {
+  executeSQL,
+  sqlRowToColumns,
+  type SQLResult,
+} from './client/sql.js';
+export {
   makeRaindbAiClient,
   resolveDefaultModel,
   resolveDefaultChatModel,
@@ -90,9 +95,34 @@ export {
   type VendorSummary,
 
   // Droplet
+  droplet_read_current,
+  droplet_read_by_id,
+  droplet_read_latest,
+  droplet_list,
+  droplet_keys,
   droplet_create,
+  droplet_update,
+  droplet_push_public,
+  droplet_bulk_create,
+  droplet_bulk_update,
   dropletTools,
+  type DropletResult,
+  type DropletPage,
+  type KeyEntry,
+  type KeyPage,
   type WriteResult,
+  type PushPublicResult,
+  type BulkDropletResult,
+
+  // Entity
+  entity_version_history,
+  entity_tag,
+  entity_untag,
+  entity_mark_for_expiration,
+  entity_cancel_expiration,
+  entity_expire,
+  entityTools,
+  type EntityVersion,
 
   // Formation
   formation_list,
@@ -112,6 +142,30 @@ export {
   config_get,
   configTools,
   type RemoteServiceConfig,
+
+  // Key
+  key_list,
+  key_create,
+  key_revoke,
+  keyTools,
+  type APIKeyInfo,
+  type APIKeyPage,
+  type CreateKeyResult,
+  type RevokeKeyResult,
+
+  // Usage
+  usage_list,
+  usage_summary,
+  usageTools,
+  type UsageEvent,
+  type UsageSummaryRow,
+
+  // LLM
+  llm_provider_list,
+  llm_model_list,
+  llm_usage_report_summary,
+  llmTools,
+  type LLMUsageReportRow,
 
   // Aggregated
   tenantTools,

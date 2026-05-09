@@ -12,16 +12,16 @@
 // The aggregator mirrors raindb-phoenix-oc/internal/ai/tools.go::
 // tenantToolTable (lines 83-100) -- same domain order so the
 // model sees a stable surface across Go + TS.
-//
-// M1 shipped: pack_list + droplet_create.
-// M2 in progress -- per-domain landings tracked in
-// docs/M2-CHECKLIST.md.
 
 import { cacheTools } from './cache.js';
 import { configTools } from './config.js';
 import { dropletTools } from './droplet.js';
+import { entityTools } from './entity.js';
 import { formationTools } from './formation.js';
+import { keyTools } from './key.js';
+import { llmTools } from './llm.js';
 import { marketplaceTools } from './marketplace.js';
+import { usageTools } from './usage.js';
 
 import type { RegisteredTool } from '../registry/types.js';
 
@@ -41,10 +41,35 @@ export {
   type VendorSummary,
 } from './marketplace.js';
 export {
+  droplet_read_current,
+  droplet_read_by_id,
+  droplet_read_latest,
+  droplet_list,
+  droplet_keys,
   droplet_create,
+  droplet_update,
+  droplet_push_public,
+  droplet_bulk_create,
+  droplet_bulk_update,
   dropletTools,
+  type DropletResult,
+  type DropletPage,
+  type KeyEntry,
+  type KeyPage,
   type WriteResult,
+  type PushPublicResult,
+  type BulkDropletResult,
 } from './droplet.js';
+export {
+  entity_version_history,
+  entity_tag,
+  entity_untag,
+  entity_mark_for_expiration,
+  entity_cancel_expiration,
+  entity_expire,
+  entityTools,
+  type EntityVersion,
+} from './entity.js';
 export {
   formation_list,
   formation_describe,
@@ -64,6 +89,30 @@ export {
   configTools,
   type RemoteServiceConfig,
 } from './config.js';
+export {
+  key_list,
+  key_create,
+  key_revoke,
+  keyTools,
+  type APIKeyInfo,
+  type APIKeyPage,
+  type CreateKeyResult,
+  type RevokeKeyResult,
+} from './key.js';
+export {
+  usage_list,
+  usage_summary,
+  usageTools,
+  type UsageEvent,
+  type UsageSummaryRow,
+} from './usage.js';
+export {
+  llm_provider_list,
+  llm_model_list,
+  llm_usage_report_summary,
+  llmTools,
+  type LLMUsageReportRow,
+} from './llm.js';
 
 /**
  * The full tenant tool table. Mirrors the Go aggregator's order so
@@ -73,23 +122,20 @@ export {
  * tenantToolTable):
  *   droplet, catalog, entity, sql, formation, cache, periscope,
  *   key, config, usage, relay, digest, llm, marketplace.
- *
- * Domains not yet ported are commented out in slot order so the
- * eventual full list looks identical to the Go side.
  */
 export const tenantTools: RegisteredTool[] = [
   ...dropletTools,
   // catalogTools   -- M2 pending
-  // entityTools    -- M2 pending
+  ...entityTools,
   // sqlTools       -- M2 pending (sql_execute, vector_search)
   ...formationTools,
   ...cacheTools,
-  // periscopeTools -- M2 pending
-  // keyTools       -- M2 pending
+  // periscopeTools -- M2 pending (17 tools)
+  ...keyTools,
   ...configTools,
-  // usageTools     -- M2 pending
+  ...usageTools,
   // relayTools     -- M2 pending
   // digestTools    -- M2 pending
-  // llmTools       -- M2 pending
+  ...llmTools,
   ...marketplaceTools,
 ];
