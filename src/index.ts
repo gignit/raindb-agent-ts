@@ -75,11 +75,44 @@ export {
 
 // === Per-domain tool catalogs ===
 export {
+  // Marketplace
   pack_list,
-  droplet_create,
+  pack_info,
+  pack_get,
+  pack_features,
+  vendor_list,
+  vendor_info,
   marketplaceTools,
-  dropletTools,
-  tenantTools,
   type PackSummary,
+  type Pack,
+  type PackFeature,
+  type PackFile,
+  type VendorSummary,
+
+  // Droplet
+  droplet_create,
+  dropletTools,
   type WriteResult,
+
+  // Formation
+  formation_list,
+  formation_describe,
+  formation_publish,
+  formationTools,
+  type FormationInfo,
+  type FormationDetail,
+  type PublishFormationResult,
+
+  // Cache
+  cache_stats_my,
+  cacheTools,
+  type CacheStatsRow,
+
+  // Config
+  config_get,
+  configTools,
+  type RemoteServiceConfig,
+
+  // Aggregated
+  tenantTools,
 } from './tools/index.js';

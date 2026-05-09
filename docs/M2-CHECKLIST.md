@@ -1,5 +1,20 @@
 # Overview
 
+## M2 progress log (newest first)
+
+**Batch 1 landed (2026-05-09)** -- read-heavy low-risk domains, fully tested + lifted into fdn-app:
+
+  - **Marketplace** (J): pack_info, pack_get, pack_features, vendor_list, vendor_info ported. pack_install deferred (filesystem-bound CLI primitive). Marketplace surface now complete except pack_install.
+  - **Formation** (D): formation_list, formation_describe, formation_publish. All three.
+  - **Cache** (O): cache_stats_my. Single tool; only tenant-scoped variant ported.
+  - **Config** (N): config_get. Single tool. (Earlier checklist drafts mentioned config_list + config_set but they don't exist on the Go tenant tool table; removed from scope.)
+
+  Total batch 1: 9 new tools across 4 domains; 35 new unit tests; package now ships 11 tools (M1's pack_list + droplet_create + batch 1's 9). fdn-app's lifter brings 8 of these onto its product surface (formation_publish kept admin-only on the shared package, not lifted into fdn-app per AGENT_TOOL_PARITY.md).
+
+**M2 remaining domains**: catalog, entity, query (sql+vector), periscope, relay, digest, llm, usage, key, plus droplet read-side (8 of 12 tools). See per-domain sections for the per-tool checklist.
+
+---
+
 M2 is mechanical bulk-port of the remaining ~68 tenant tools from `raindb-phoenix-oc/internal/ai/tools_*.go` into this package's `src/tools/<domain>.ts`.
 
 **Why a checklist instead of a single big PR**: tools port one-at-a-time. Doing all 68 in one pass without per-tool tests means breakage compounds; doing them with tests as you go means each green test is a checkpoint. The scaffold + 2 pilots (M1) are already proven; M2 is just running the same template per tool.
