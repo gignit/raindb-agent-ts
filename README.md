@@ -35,11 +35,11 @@
 > surfaces as substitutable. Don't rename, don't "improve", don't
 > add tools that don't exist on the Go side.
 >
-> **Use `coder` MCP tools for all code reading.** Don't grep, don't
-> cat. Use `coder_go_function selector="<X>"` for the Go
-> references, `coder_typescript_function selector="<X>"` for the
-> TS sources. Run `coder_go_duplicates` and `coder_go_errors`
-> after structural changes.
+> **Use `coder` MCP tools for all code reading.** The "Coder MCP"
+> section below has the cheat sheet, the discovery sequence for
+> each new domain, and the power patterns for this work. Read
+> it. The Go reference has ~528 files; coder is the only
+> efficient way to navigate it.
 >
 > **Don't break the public API once fdn-app installs the
 > package.** The `src/index.ts` exports are contractual.
@@ -114,9 +114,148 @@ your machine before starting Milestone 1.
    JSON Schema, `execute(ctx, args)` shape). Your tool ports
    follow this pattern.
 
-Use `coder` for ALL code reading. Don't grep, don't cat. The
-coder MCP tools handle Go and TypeScript natively and produce
-token-efficient output.
+---
+
+## Coder MCP -- the only way you read raindb-phoenix-oc
+
+Don't grep. Don't cat. Don't Read large files line-by-line.
+`raindb-phoenix-oc` is ~528 Go files; coder is the AST-aware,
+token-efficient way to navigate it. The Go and TypeScript
+extensions are language-correct -- coder knows what a
+`Registration` is, what methods belong to a receiver, what
+calls a function.
+
+Every coder call accepts `cwd=<path>` to scope to a repo, so
+you'll prefix every query with `cwd=~/src/raindb-phoenix-oc`
+when you're reading the Go reference. Drop `cwd` for the local
+package (this repo).
+
+### Cheat sheet -- the queries you will use most
+
+| Goal | Tool |
+|---|---|
+| Read one Go function's full body | `coder_go_function selector="<Name>" cwd=...` |
+| Read multiple in one call (regex OR comma-list) | `coder_go_function selector="ToolA\|ToolB"` or `selector="ToolA,ToolB"` |
+| Read all funcs in a tool returner file | `coder_go_function selector="^tenant.*Tools$\|^admin.*Tools$"` |
+| Read a Go struct/type | `coder_go_type selector="<Name>"` |
+| Find what calls a function | `coder_go_callers selector="<Name>"` |
+| Find every reference to a symbol | `coder_go_references selector="<Name>"` |
+| Whole-codebase landscape (no dir) | `coder_snapshot cwd=...` |
+| One package's contents | `coder_snapshot dir="internal/ai"` |
+| All functions in a directory | `coder_go_functions dir="internal/ai"` |
+| Imports + dependency layer check | `coder_go_dependencies dir="internal/ai"` |
+| Catch your own mistakes after edits | `coder_go_duplicates`, `coder_go_errors` |
+
+Every Go coder response **auto-appends** PARSE ERRORS and
+DUPLICATE DEFINITIONS sections at the bottom when problems
+exist. After any structural change you make in the Go side
+(rare in this work, but possible), check the bottom of the next
+coder response. Don't ignore it.
+
+### Power patterns specific to this work
+
+You're translating ~70 tools from Go to TypeScript. The Go
+files follow a strict shape: each `internal/ai/tools_<domain>.go`
+exports one returner function `tenantXTools(f *cliutil.Factory)
+[]Registration` whose body is a literal `return []Registration{
+{...}, {...} }`. Each `Registration` has `Name`, `Description`,
+`Schema`, `Invoke`, optional `ModifiesResource`. That's the
+unit you're translating.
+
+**To read a whole tool domain at once:**
+
+```
+coder_go_function {
+  cwd: "~/src/raindb-phoenix-oc",
+  selector: "^tenantMarketplaceTools$",
+  plus: true
+}
+```
+
+`plus: true` enables all annotations (comments, jsdoc-equivalent,
+decorator metadata) so you see the full intent.
+
+**To enumerate every Go ops function a domain calls (so you
+know what GraphQL operations to mirror in TS):**
+
+```
+coder_go_function {
+  cwd: "~/src/raindb-phoenix-oc",
+  selector: "^tenantMarketplaceTools$"
+}
+```
+
+Read the body; every `ops.X` call is a TypeScript port target.
+Then for each:
+
+```
+coder_go_function {
+  cwd: "~/src/raindb-phoenix-oc",
+  selector: "^PackList$",
+  plus: true
+}
+```
+
+shows you the GraphQL operation it builds + the result shape.
+Mirror both in TypeScript.
+
+**To trace from a tool name to its GraphQL wire format:**
+
+```
+1. coder_go_function selector="^<ToolName>Tools$"     -- find Invoke body
+2. coder_go_function selector="^<OpsFn>$"             -- read the ops func
+3. coder_go_callers selector="GQLCall"                -- find raw GraphQL helper
+4. Read the operation string in the ops func body     -- that's your TS query
+```
+
+**To verify your TypeScript translation matches the Go shape:**
+
+```
+coder_typescript_function selector="^packListTool$"   (in this repo)
+coder_go_function cwd="~/src/raindb-phoenix-oc" selector="^tenantMarketplaceTools$"
+```
+
+Visually diff parameter names, required-list, ModifiesResource
+flag, and result projection. The two should be substitutable
+from the model's perspective.
+
+### Discovery sequence for a new domain
+
+When porting `tools_<domain>.ts`, run these in order before
+writing any TS:
+
+1. `coder_go_function selector="^tenant<X>Tools$\|^admin<X>Tools$" cwd="~/src/raindb-phoenix-oc"` -- enumerate every tool in the domain. Note: name, description, parameters, ModifiesResource flag, ops function called.
+2. For each ops function called: `coder_go_function selector="^<OpsFn>$" plus=true cwd="~/src/raindb-phoenix-oc"` -- read the GraphQL operation + result shape.
+3. `coder_go_type selector="^<ResultType>$" cwd="~/src/raindb-phoenix-oc"` -- read the result struct so you know what to project in TypeScript.
+
+Now you have the full mapping. Translate to TS in one pass.
+
+### What NOT to do with coder
+
+- **Don't pass `dir` to GET commands** (`coder_go_function`,
+  `coder_go_type`, `coder_go_const`). They search globally by
+  name. `dir` only narrows FIND commands (`coder_go_functions`,
+  `coder_go_types`, `coder_go_consts`).
+- **Don't use glob syntax** (`handle*`). coder uses regex. Use
+  `^handle.*` or `handle.*$` instead.
+- **Don't read Go files with the Read tool.** They're in another
+  repo and the LSP fights you. Use `coder_go_function` /
+  `coder_go_type` instead.
+- **Don't read whole files via `coder_go_function` selector
+  matching the file name.** That's not what selectors do; you'll
+  get nothing. Match by symbol name.
+- **Don't trust the LSP errors that show up when you Read or
+  Edit phoenix Go files.** Phoenix's GOROOT setup confuses the
+  LSP into reporting `cannot find package` for legitimate
+  intra-project imports. `coder_go_errors` is the source of
+  truth.
+
+### Refresher
+
+Run `coder_go_guide` once at session start to refresh the full
+guide. Don't memorize it; just know it's there. The five-tier
+mental model (FIND -> GET -> RELATIONSHIP -> ANNOTATE ->
+FILTERS) plus the SELECTOR rules are 90% of what you need.
 
 ---
 
