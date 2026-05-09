@@ -1,5 +1,54 @@
 # raindb-agent-ts
 
+> ## Agent: start here
+>
+> You are working on `@raindb/agent` -- a shared TypeScript agent
+> runtime + tool catalog. Two consumers: `~/src/fdn-app` and
+> `~/src/raindb-app`. The Go agent at
+> `~/src/raindb-phoenix-oc/internal/ai/` is the reference
+> implementation; this package is its TypeScript mirror. Your
+> goal is full **raindb-cli parity** for the TypeScript portals.
+>
+> **Sequence:**
+>
+> 1. Read this README end-to-end. The "Read these BEFORE writing
+>    any code" section names the four other docs you must read
+>    before touching code. Do not skip them.
+>
+> 2. Land **Milestone 1** (skeleton + 2 reference tools verified
+>    end-to-end against fdn-app). Stop and verify before
+>    proceeding. Do NOT bulk-port tools yet.
+>
+> 3. Land **Milestone 2** (the remaining ~68 tools) once the
+>    pattern from Milestone 1 is proven. Each tool is a
+>    mechanical translation of its Go reference; do not redesign.
+>
+> 4. Land **Milestone 3** in `~/src/raindb-app`: add the agent
+>    server endpoint + client UI consuming this package, mounting
+>    the same `tenantTools` array fdn-app uses. **This is when
+>    the user's stated goal is achieved.**
+>
+> **Every tool must mirror its Go counterpart** in
+> `~/src/raindb-phoenix-oc/internal/ai/tools_*.go` exactly: same
+> name (snake_case), same parameters, same `ModifiesResource`
+> flag, same description text. The model treats the Go and TS
+> surfaces as substitutable. Don't rename, don't "improve", don't
+> add tools that don't exist on the Go side.
+>
+> **Use `coder` MCP tools for all code reading.** Don't grep, don't
+> cat. Use `coder_go_function selector="<X>"` for the Go
+> references, `coder_typescript_function selector="<X>"` for the
+> TS sources. Run `coder_go_duplicates` and `coder_go_errors`
+> after structural changes.
+>
+> **Don't break the public API once fdn-app installs the
+> package.** The `src/index.ts` exports are contractual.
+>
+> Verification checklist + reporting protocol at the bottom of
+> this file. Update the Status section when each milestone lands.
+
+---
+
 Shared TypeScript agent package for the RainDB ecosystem.
 Two consumers: `fdn-app` (the FDN portal) and `raindb-app` (the
 RainDB platform portal). Both import the same agent runtime,
@@ -11,13 +60,27 @@ reference implementation. This package is a TypeScript mirror.
 
 ---
 
-## Status: empty repo, ready for the first commit
+## Status: scaffold in place, ready for Milestone 1
 
-The directory is initialized as a git repo pointing at
-`git@github.com:gignit/raindb-agent-ts.git`. Nothing else is in
-it yet. Your job is to land a working v0.1.0 according to the
-plan below, then get parity into `fdn-app`, then surface the
-agent in `raindb-app`.
+| Component | State |
+|---|---|
+| `package.json`, `tsconfig.json`, `tsconfig.test.json`, `.gitignore` | Done |
+| `src/index.ts` (placeholder, exports `VERSION`) | Done |
+| `test/unit/smoke.test.ts` (verifies the export) | Done |
+| `npm install`, `npm run typecheck`, `npm run build`, `npm run test` | All clean |
+| `runAgent`, types, GraphQL client, openai client | **Pending Milestone 1** |
+| Tool implementations | **Pending Milestone 1 (2 tools), Milestone 2 (~68 tools)** |
+| fdn-app consumption | **Pending Milestone 1+2** |
+| raindb-app consumption | **Pending Milestone 3** |
+
+The toolchain matches `fdn-app/server` exactly: TypeScript 5.6,
+Node 20, ESM, `module: NodeNext`, `node --test` runner with
+`tsx` import. No ESLint -- typecheck IS the lint, same as
+fdn-app. No vitest -- `node:test` is the runner, same as
+fdn-app.
+
+Run `npm install && npm test` to verify the scaffold works on
+your machine before starting Milestone 1.
 
 ---
 
@@ -72,16 +135,12 @@ raindb-api.
 
 Tasks:
 
-- Initialize `package.json`. Name: `@raindb/agent`. Version:
-  `0.1.0`. Type: module (ESM). Main + types pointing at
-  `dist/index.js` + `dist/index.d.ts`. Peer deps: `openai`
-  (only library that touches the wire on the model side).
-- TypeScript config: strict, ES2022 target, NodeNext module
-  resolution. Output to `dist/`.
-- ESLint config matching fdn-app's (steal from
-  `fdn-app/server/.eslintrc` or equivalent).
-- Vitest config + a smoke test that imports `runAgent` and
-  verifies the registry can be built.
+- ~~Initialize `package.json`, `tsconfig.json`, ESLint, vitest~~
+  **Done in scaffold commit. See "Status" above. The toolchain
+  matches fdn-app/server exactly: TypeScript 5.6, Node 20, ESM
+  with NodeNext, `node:test` runner via `tsx`. No ESLint
+  (typecheck is the lint). No vitest (`node:test` is the
+  runner).**
 - Extract `runAgent`, `RegisteredTool`, `ToolContext`,
   `AgentEvent`, `ToolEvent`, `AgentResult` from
   `fdn-app/server/src/services/agentLoop.ts` and
