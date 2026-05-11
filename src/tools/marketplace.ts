@@ -1,56 +1,51 @@
 // marketplace.ts -- agent tools for the RainDB marketplace
 // (vendor/pack browsing).
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_marketplace.go. Tool
-// names + parameters match exactly so the model sees a
-// substitutable surface across the Go (raindb-cli) and TS portals.
+// Phase 6 of docs/BRIDGE_REFACTOR_PLAN.md in raindb-phoenix-oc:
+// marketplace is a PARTNER of the bridge, not a passenger. It
+// lives on raindb-app as an anonymous-readable REST API. These
+// tools fetch from that REST surface instead of trying to
+// listDroplets the platform tenant via per-tenant GraphQL
+// credentials -- which fails because the marketplace formations
+// aren't bridged to per-tenant tenants.
 //
-// Milestone 1 ships only `pack_list` as a read-only pilot. The
-// remaining marketplace tools (pack_info, pack_get, pack_features,
-// vendor_list, vendor_info) land in Milestone 2 alongside the
-// rest of the catalog. pack_install is intentionally NOT ported
-// to the shared package: it writes to the operator's filesystem,
-// which only the CLI host has. Portal hosts can implement an
-// equivalent that publishes the pack's formations to the user's
-// project (a substantial product feature scoped per-host).
+// Decision matrix walk (PROJECT_REQUIREMENTS.md section 1.2):
+//
+//   Rule 1 (numbered rules): A.2 "no fallbacks" -- marketplaceBaseUrl
+//   is required when calling marketplace tools; absence is an
+//   explicit error.
+//
+//   Rule 2 (phoenix pattern): the marketplace REST API on raindb-app
+//   is the existing primitive (server/index.js routes
+//   /api/marketplace/*). This is what raindb-app's web UI already
+//   consumes; we mirror that pattern.
+//
+//   Rule 5 (default to simpler): HTTP fetch with no auth is
+//   structurally simpler than threading per-tenant API keys +
+//   ListDroplets + projection mapping. Same payload shape; one
+//   round-trip per call.
+//
+// Mirrors raindb-phoenix-oc/internal/ai/tools_marketplace.go for
+// tool names + parameters so the model sees a substitutable
+// surface across the Go (raindb-cli) and TS portals.
+//
+// pack_install is intentionally NOT ported to the shared package:
+// it writes to the operator's filesystem, which only the CLI host
+// has. Portal hosts can implement an equivalent that publishes
+// the pack's formations to the user's project via Genesis seeds
+// (a substantial product feature scoped per-host).
 
-import { executeGraphQL } from '../client/graphql.js';
+import { RaindbError } from '../client/graphql.js';
 import {
-  intArg,
   stringArg,
 } from '../registry/build.js';
-import type { RegisteredTool } from '../registry/types.js';
+import type { RegisteredTool, ToolContext } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror raindb-phoenix-oc/internal/ops/marketplace.go)
+// Wire shapes (mirror raindb-app's /api/marketplace/* response shapes,
+// which are byte-identical to raindb-phoenix-oc/internal/ops/marketplace.go's
+// Pack / PackSummary / VendorSummary projections).
 // ---------------------------------------------------------------------------
-
-const PACK_FORMATION = 'platform_marketplace_pack';
-
-interface PackPayload {
-  packId?: string;
-  vendor?: string;
-  packName?: string;
-  version?: string;
-  vendorPackKey?: string;
-  vendorPackVersion?: string;
-  packGroup?: string;
-  title?: string;
-  displayName?: string;
-  description?: string;
-  category?: string;
-  subcategory?: string;
-  tags?: string[];
-  icon?: string;
-  license?: string;
-  deprecated?: boolean;
-  usageIntent?: string;
-  totalFiles?: number;
-  totalLoc?: number;
-  tokenEstimate?: number;
-  publishedAt?: string;
-  updatedAt?: string;
-}
 
 /** Public summary projection returned by `pack_list`. */
 export interface PackSummary {
@@ -77,186 +72,6 @@ export interface PackSummary {
   publishedAt: string;
   updatedAt: string;
 }
-
-interface DropletEnvelope {
-  dropletId: string;
-  formationId: string;
-  schemaVersion: number;
-  ts: string;
-  author: string;
-  payload: PackPayload;
-}
-
-interface ListDropletsResponse {
-  listDroplets: {
-    droplets: DropletEnvelope[];
-    nextCursor?: string | null;
-    hasMore: boolean;
-  };
-}
-
-const LIST_DROPLETS_QUERY = `
-  query ListDroplets($input: ListDropletsInput!) {
-    listDroplets(input: $input) {
-      droplets {
-        dropletId
-        formationId
-        schemaVersion
-        ts
-        author
-        payload
-      }
-      nextCursor
-      hasMore
-    }
-  }
-`;
-
-// ---------------------------------------------------------------------------
-// Filter implementation (mirror of ops/marketplace.go::PackListFilter.matches)
-// ---------------------------------------------------------------------------
-
-interface ParsedFilter {
-  vendor: string;
-  category: string;
-  usageIntent: string;
-  search: string;
-  pageSize: number;
-}
-
-function packMatches(p: PackSummary, f: ParsedFilter): boolean {
-  if (f.vendor && p.vendor !== f.vendor) return false;
-  if (f.category && p.category !== f.category) return false;
-  if (f.usageIntent && p.usageIntent !== f.usageIntent) return false;
-  if (f.search) {
-    const q = f.search.toLowerCase();
-    const haystack = [
-      p.title,
-      p.displayName,
-      p.description,
-      p.packName,
-      ...p.tags,
-    ]
-      .filter((s) => typeof s === 'string')
-      .join(' ')
-      .toLowerCase();
-    if (!haystack.includes(q)) return false;
-  }
-  return true;
-}
-
-function projectPackSummary(payload: PackPayload | null | undefined): PackSummary | null {
-  if (!payload || !payload.packId) return null;
-  return {
-    packId: payload.packId,
-    vendor: payload.vendor ?? '',
-    packName: payload.packName ?? '',
-    version: payload.version ?? '',
-    vendorPackKey: payload.vendorPackKey ?? '',
-    vendorPackVersion: payload.vendorPackVersion ?? '',
-    packGroup: payload.packGroup ?? '',
-    title: payload.title ?? '',
-    displayName: payload.displayName ?? '',
-    description: payload.description ?? '',
-    category: payload.category ?? '',
-    subcategory: payload.subcategory ?? '',
-    tags: Array.isArray(payload.tags) ? payload.tags.slice() : [],
-    icon: payload.icon ?? '',
-    license: payload.license ?? '',
-    deprecated: Boolean(payload.deprecated),
-    usageIntent: payload.usageIntent ?? '',
-    totalFiles: typeof payload.totalFiles === 'number' ? payload.totalFiles : 0,
-    totalLoc: typeof payload.totalLoc === 'number' ? payload.totalLoc : 0,
-    tokenEstimate: typeof payload.tokenEstimate === 'number' ? payload.tokenEstimate : 0,
-    publishedAt: payload.publishedAt ?? '',
-    updatedAt: payload.updatedAt ?? '',
-  };
-}
-
-// ---------------------------------------------------------------------------
-// pack_list -- Go reference: tools_marketplace.go::tenantMarketplaceTools
-// pack_list entry (lines 32-64). Filter shape: ops/marketplace.go::
-// PackListFilter (lines 150-156). Implementation logic: ops/marketplace.go::
-// PackList (lines 241-284).
-// ---------------------------------------------------------------------------
-
-export const pack_list: RegisteredTool = {
-  name: 'pack_list',
-  description:
-    'List vendor-published packs in the marketplace. Each pack is a self-contained '
-    + 'bundle (README + formation configs + schemas + code samples) the agent can '
-    + 'inspect or install. START HERE when the user asks how to do something in '
-    + 'raindb that you don\'t already know. Filter by vendor, category, usageIntent, '
-    + 'or free-text search. Equivalent CLI: raindb-cli pack list.',
-  minRole: 'read',
-  parameters: {
-    type: 'object',
-    properties: {
-      vendor: { type: 'string', description: "Filter by vendor id (e.g. 'raindb')." },
-      category: { type: 'string', description: "Filter by category (e.g. 'social', 'finance')." },
-      usageIntent: {
-        type: 'string',
-        description: 'Filter by intent: example | reference | pattern | production | experimental.',
-      },
-      search: {
-        type: 'string',
-        description: 'Case-insensitive substring against title/description/tags.',
-      },
-      pageSize: { type: 'integer', description: 'Page size (default 200).' },
-    },
-  },
-  async execute(ctx, args) {
-    const filter: ParsedFilter = {
-      vendor: stringArg(args, 'vendor'),
-      category: stringArg(args, 'category'),
-      usageIntent: stringArg(args, 'usageIntent'),
-      search: stringArg(args, 'search'),
-      pageSize: intArg(args, 'pageSize', 200),
-    };
-    const pageSize = filter.pageSize > 0 ? filter.pageSize : 200;
-
-    const data = await executeGraphQL<ListDropletsResponse>(
-      LIST_DROPLETS_QUERY,
-      {
-        input: {
-          formationId: PACK_FORMATION,
-          prefix: `entities/${PACK_FORMATION}/`,
-          pageSize,
-        },
-      },
-      ctx.creds,
-    );
-
-    // Group by vendorPackKey, keep latest by publishedAt -- mirrors
-    // ops/marketplace.go::PackList (lines 257-268).
-    const latestByGroup = new Map<string, PackSummary>();
-    for (const env of data.listDroplets.droplets ?? []) {
-      const summary = projectPackSummary(env.payload);
-      if (!summary) continue;
-      const key = summary.vendorPackKey;
-      const prior = latestByGroup.get(key);
-      if (!prior || summary.publishedAt > prior.publishedAt) {
-        latestByGroup.set(key, summary);
-      }
-    }
-
-    const out: PackSummary[] = [];
-    for (const summary of latestByGroup.values()) {
-      if (packMatches(summary, filter)) out.push(summary);
-    }
-    out.sort((a, b) => {
-      if (a.vendor !== b.vendor) return a.vendor < b.vendor ? -1 : 1;
-      return a.packName < b.packName ? -1 : a.packName > b.packName ? 1 : 0;
-    });
-    return out;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Pack-detail wire shapes (mirror internal/ops/marketplace.go::Pack +
-// PackFile + PackFeature). Pack embeds PackSummary; we flatten + add
-// the detail-only fields here.
-// ---------------------------------------------------------------------------
 
 export interface PackFeature {
   id: string;
@@ -304,70 +119,146 @@ export interface VendorSummary {
   verified: boolean;
 }
 
-const VENDOR_FORMATION = 'platform_marketplace_vendor';
+// ---------------------------------------------------------------------------
+// REST transport
+// ---------------------------------------------------------------------------
 
-interface DropletPayload {
-  dropletId: string;
-  formationId: string;
-  ts: string;
-  payload: Record<string, unknown> | null;
-}
-
-interface ReadLatestResponse {
-  readLatest: DropletPayload | null;
-}
-
-const READ_LATEST_QUERY = `
-  query ReadLatest($input: ReadLatestInput!) {
-    readLatest(input: $input) {
-      dropletId
-      formationId
-      ts
-      payload
-    }
+/**
+ * Resolve the marketplace base URL from the tool context. Returns
+ * either a normalized URL (trailing slash stripped) or an error
+ * object the caller surfaces verbatim. Per the "no fallbacks"
+ * principle: absence is an explicit error, never a default URL.
+ */
+function resolveMarketplaceBaseUrl(ctx: ToolContext): string | { error: string } {
+  const raw = ctx.marketplaceBaseUrl;
+  if (!raw || typeof raw !== 'string' || raw.trim() === '') {
+    return {
+      error:
+        'marketplaceBaseUrl required on ToolContext. The shared package '
+        + 'does not read process.env directly; the host (fdn-app, raindb-app, '
+        + 'or other) must populate it. Typically: ctx.marketplaceBaseUrl = '
+        + 'process.env.RAINDB_API_URL (default http://localhost:8080).',
+    };
   }
-`;
-
-/**
- * Project a pack-formation droplet payload into a typed Pack.
- * Mirrors internal/ops/marketplace.go::projectPack -- JSON
- * round-trip + packId presence check.
- */
-function projectPack(payload: Record<string, unknown> | null): Pack | null {
-  if (!payload || !payload['packId']) return null;
-  // Pull the full Pack shape via a permissive cast; trust the
-  // server-side schema validator. Tests exercise the shape so any
-  // drift surfaces immediately.
-  return payload as unknown as Pack;
+  return raw.replace(/\/+$/, '');
 }
 
 /**
- * Project a vendor-formation droplet payload. Mirrors
- * internal/ops/marketplace.go::projectVendor -- 7 fields,
- * vendorId required.
+ * Fetch a JSON document from the marketplace REST API on raindb-api.
+ * Sends `X-API-Key: <ctx.creds.apiKey>` because raindb-api's
+ * authMiddleware gates `/api/marketplace/*` post-S.1 (commit 2ee476a
+ * on raindb-phoenix-oc). The caller identity is used for authn /
+ * observability only; the actual data source is the marketplace
+ * tenant resolved server-side via platform_marketplace_credential.
+ *
+ * Throws a `RaindbError` on transport failure or non-2xx response so
+ * the agent loop can surface a typed error to the model.
  */
-function projectVendor(payload: Record<string, unknown> | null): VendorSummary | null {
-  if (!payload) return null;
-  const vendorId = String(payload['vendorId'] ?? '');
-  if (!vendorId) return null;
-  return {
-    vendorId,
-    displayName: String(payload['displayName'] ?? ''),
-    description: String(payload['description'] ?? '') || undefined,
-    icon: String(payload['icon'] ?? '') || undefined,
-    homepage: String(payload['homepage'] ?? '') || undefined,
-    license: String(payload['license'] ?? '') || undefined,
-    verified: Boolean(payload['verified']),
-  };
+async function fetchMarketplace<T>(
+  baseUrl: string,
+  path: string,
+  apiKey: string | undefined,
+): Promise<T> {
+  const url = `${baseUrl}${path}`;
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (apiKey && apiKey.trim() !== '') {
+    headers['X-API-Key'] = apiKey;
+  }
+  let response: Response;
+  try {
+    response = await fetch(url, { method: 'GET', headers });
+  } catch (err) {
+    throw new RaindbError(
+      `marketplace fetch failed (network): ${url}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (!response.ok) {
+    let body = '';
+    try {
+      body = await response.text();
+    } catch {
+      /* ignore */
+    }
+    throw new RaindbError(
+      `marketplace fetch failed (HTTP ${response.status}): ${url}${body ? ': ' + body.slice(0, 200) : ''}`,
+      { status: response.status },
+    );
+  }
+  try {
+    return (await response.json()) as T;
+  } catch (err) {
+    throw new RaindbError(
+      `marketplace returned non-JSON: ${url}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
-// pack_info -- Go ref: tools_marketplace.go (lines 65-93)
-//   + ops/marketplace.go::PackInfo (lines 291-312)
-//
-// Reads via readLatest with by-vendor-pack-latest (no version) or
-// by-vendor-pack-version (pinned).
+// pack_list -- GET /api/marketplace/packs[?vendor=...&category=...&...]
 // ---------------------------------------------------------------------------
+
+interface PacksResponse {
+  tagline?: string;
+  packs: PackSummary[];
+}
+
+export const pack_list: RegisteredTool = {
+  name: 'pack_list',
+  description:
+    'List vendor-published packs in the marketplace. Each pack is a self-contained '
+    + 'bundle (README + formation configs + schemas + code samples) the agent can '
+    + 'inspect or install. START HERE when the user asks how to do something in '
+    + "raindb that you don't already know. Filter by vendor, category, usageIntent, "
+    + 'or free-text search. Equivalent CLI: raindb-cli pack list.',
+  minRole: 'read',
+  parameters: {
+    type: 'object',
+    properties: {
+      vendor: { type: 'string', description: "Filter by vendor id (e.g. 'raindb')." },
+      category: { type: 'string', description: "Filter by category (e.g. 'social', 'finance')." },
+      usageIntent: {
+        type: 'string',
+        description: 'Filter by intent: example | reference | pattern | production | experimental.',
+      },
+      search: {
+        type: 'string',
+        description: 'Case-insensitive substring against title/description/tags.',
+      },
+    },
+  },
+  async execute(ctx, args) {
+    const base = resolveMarketplaceBaseUrl(ctx);
+    if (typeof base !== 'string') return base;
+
+    // Build query string. raindb-app's /api/marketplace/packs accepts
+    // vendor, category, usageIntent, search as query params and applies
+    // the filtering server-side -- we forward whatever the LLM passed,
+    // server is the canonical filter implementation. (Mirrors the
+    // "marketplace REST is the partner" Phase 6 decision: don't
+    // re-implement filter semantics client-side; defer to server.)
+    const qs = new URLSearchParams();
+    const vendor = stringArg(args, 'vendor');
+    if (vendor) qs.set('vendor', vendor);
+    const category = stringArg(args, 'category');
+    if (category) qs.set('category', category);
+    const usageIntent = stringArg(args, 'usageIntent');
+    if (usageIntent) qs.set('usageIntent', usageIntent);
+    const search = stringArg(args, 'search');
+    if (search) qs.set('search', search);
+
+    const path = `/api/marketplace/packs${qs.size > 0 ? '?' + qs.toString() : ''}`;
+    const data = await fetchMarketplace<PacksResponse>(base, path, ctx.creds?.apiKey);
+    return data.packs ?? [];
+  },
+};
+
+// ---------------------------------------------------------------------------
+// pack_info -- GET /api/marketplace/packs/:vendor/:packName[?version=...]
+// ---------------------------------------------------------------------------
+
+interface PackResponse {
+  pack: Pack;
+}
 
 export const pack_info: RegisteredTool = {
   name: 'pack_info',
@@ -390,53 +281,48 @@ export const pack_info: RegisteredTool = {
     required: ['vendor', 'packName'],
   },
   async execute(ctx, args) {
+    const base = resolveMarketplaceBaseUrl(ctx);
+    if (typeof base !== 'string') return base;
+
     const vendor = stringArg(args, 'vendor');
     const packName = stringArg(args, 'packName');
     const version = stringArg(args, 'version');
     if (!vendor || !packName) {
       return { error: 'vendor and packName required' };
     }
-    let index: string;
-    let scopeValue: string;
-    if (!version) {
-      index = 'by-vendor-pack-latest';
-      scopeValue = `${vendor}-${packName}`;
-    } else {
-      index = 'by-vendor-pack-version';
-      scopeValue = `${vendor}-${packName}-${version}`;
+    const qs = new URLSearchParams();
+    if (version) qs.set('version', version);
+    const path = `/api/marketplace/packs/${encodeURIComponent(vendor)}/${encodeURIComponent(packName)}${qs.size > 0 ? '?' + qs.toString() : ''}`;
+
+    let data: PackResponse;
+    try {
+      data = await fetchMarketplace<PackResponse>(base, path, ctx.creds?.apiKey);
+    } catch (err) {
+      // 404 surfaces as a typed RaindbError with status=404; convert
+      // to the friendlier "pack not found" message the prior GraphQL
+      // path returned.
+      if (err instanceof RaindbError && err.status === 404) {
+        return {
+          error: `pack not found: ${vendor}/${packName}${version ? '@' + version : ''}`,
+        };
+      }
+      throw err;
     }
-    const data = await executeGraphQL<ReadLatestResponse>(
-      READ_LATEST_QUERY,
-      {
-        input: {
-          formationId: PACK_FORMATION,
-          indexId: index,
-          scopeValue,
-        },
-      },
-      ctx.creds,
-    );
-    if (!data.readLatest) {
+    if (!data.pack) {
       return { error: `pack not found: ${vendor}/${packName}${version ? '@' + version : ''}` };
     }
-    const pack = projectPack(data.readLatest.payload);
-    if (!pack) {
-      return { error: 'pack payload missing packId' };
-    }
-    return pack;
+    return data.pack;
   },
 };
 
 // ---------------------------------------------------------------------------
-// pack_get -- Go ref: tools_marketplace.go (lines 95-122). Alias for
-// pack_info (CLI symmetry with `raindb-cli pack get`). Same parameter
-// shape, same result.
+// pack_get -- CLI symmetry alias for pack_info.
 // ---------------------------------------------------------------------------
 
 export const pack_get: RegisteredTool = {
   name: 'pack_get',
   description:
-    'Same data as pack_info; alias for symmetry with the CLI \'pack get\' verb. '
+    "Same data as pack_info; alias for symmetry with the CLI 'pack get' verb. "
     + 'Equivalent CLI: raindb-cli pack get <vendor> <pack> [@<version>].',
   minRole: 'read',
   parameters: {
@@ -452,9 +338,7 @@ export const pack_get: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// pack_features -- Go ref: tools_marketplace.go (lines 124-148)
-//   + ops/marketplace.go::PackFeatures (lines 325-331)
-// Reads the same pack record via PackInfo, projects to features[].
+// pack_features -- projects pack_info to features[].
 // ---------------------------------------------------------------------------
 
 export const pack_features: RegisteredTool = {
@@ -487,9 +371,13 @@ export const pack_features: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// vendor_list -- Go ref: tools_marketplace.go (lines 189-202)
-//   + ops/marketplace.go::VendorList (lines 192-215)
+// vendor_list -- GET /api/marketplace/vendors
 // ---------------------------------------------------------------------------
+
+interface VendorsResponse {
+  tagline?: string;
+  vendors: VendorSummary[];
+}
 
 export const vendor_list: RegisteredTool = {
   name: 'vendor_list',
@@ -499,34 +387,20 @@ export const vendor_list: RegisteredTool = {
   minRole: 'read',
   parameters: { type: 'object' },
   async execute(ctx) {
-    const data = await executeGraphQL<ListDropletsResponse>(
-      LIST_DROPLETS_QUERY,
-      {
-        input: {
-          formationId: VENDOR_FORMATION,
-          prefix: `entities/${VENDOR_FORMATION}/`,
-          pageSize: 200,
-        },
-      },
-      ctx.creds,
-    );
-    const out: VendorSummary[] = [];
-    const seen = new Set<string>();
-    for (const env of data.listDroplets.droplets ?? []) {
-      const v = projectVendor(env.payload as unknown as Record<string, unknown> | null);
-      if (!v || seen.has(v.vendorId)) continue;
-      seen.add(v.vendorId);
-      out.push(v);
-    }
-    out.sort((a, b) => (a.vendorId < b.vendorId ? -1 : a.vendorId > b.vendorId ? 1 : 0));
-    return out;
+    const base = resolveMarketplaceBaseUrl(ctx);
+    if (typeof base !== 'string') return base;
+    const data = await fetchMarketplace<VendorsResponse>(base, '/api/marketplace/vendors', ctx.creds?.apiKey);
+    return data.vendors ?? [];
   },
 };
 
 // ---------------------------------------------------------------------------
-// vendor_info -- Go ref: tools_marketplace.go (lines 204-225)
-//   + ops/marketplace.go::VendorInfo (lines 218-227)
+// vendor_info -- GET /api/marketplace/vendors/:vendorId
 // ---------------------------------------------------------------------------
+
+interface VendorResponse {
+  vendor: VendorSummary;
+}
 
 export const vendor_info: RegisteredTool = {
   name: 'vendor_info',
@@ -542,29 +416,26 @@ export const vendor_info: RegisteredTool = {
     required: ['vendorId'],
   },
   async execute(ctx, args) {
+    const base = resolveMarketplaceBaseUrl(ctx);
+    if (typeof base !== 'string') return base;
     const vendorId = stringArg(args, 'vendorId');
     if (!vendorId) {
       return { error: 'vendorId required' };
     }
-    const data = await executeGraphQL<ReadLatestResponse>(
-      READ_LATEST_QUERY,
-      {
-        input: {
-          formationId: VENDOR_FORMATION,
-          indexId: 'by-id-latest',
-          scopeValue: vendorId,
-        },
-      },
-      ctx.creds,
-    );
-    if (!data.readLatest) {
+    const path = `/api/marketplace/vendors/${encodeURIComponent(vendorId)}`;
+    let data: VendorResponse;
+    try {
+      data = await fetchMarketplace<VendorResponse>(base, path, ctx.creds?.apiKey);
+    } catch (err) {
+      if (err instanceof RaindbError && err.status === 404) {
+        return { error: `vendor not found: ${vendorId}` };
+      }
+      throw err;
+    }
+    if (!data.vendor) {
       return { error: `vendor not found: ${vendorId}` };
     }
-    const v = projectVendor(data.readLatest.payload);
-    if (!v) {
-      return { error: 'vendor payload missing vendorId' };
-    }
-    return v;
+    return data.vendor;
   },
 };
 
@@ -572,7 +443,8 @@ export const vendor_info: RegisteredTool = {
  * Per-domain catalog. pack_install is intentionally NOT included --
  * see docs/M2-CHECKLIST.md section J.5 for the deferral rationale
  * (filesystem-bound CLI primitive, portal hosts need a different
- * semantic).
+ * semantic; Phase 5 of docs/BRIDGE_REFACTOR_PLAN.md is the
+ * Genesis-seed-based replacement).
  */
 export const marketplaceTools: RegisteredTool[] = [
   pack_list,

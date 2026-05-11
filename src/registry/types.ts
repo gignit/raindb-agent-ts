@@ -76,6 +76,40 @@ export interface ToolContext {
    * its own state. The shared tools never read this.
    */
   product?: Record<string, unknown>;
+  /**
+   * Base URL of the marketplace REST API on **raindb-api**
+   * (`/api/marketplace/*`). Per FINAL DECISION S.1 (in raindb-
+   * phoenix-oc/docs/BRIDGE_REFACTOR_PLAN.md): marketplace lives
+   * on raindb-api at :8080, NOT on raindb-app at :4000. This is
+   * a post-S.1 detail; pre-S.1 the surface was on raindb-app and
+   * was anonymous-readable, and this comment used to say so.
+   *
+   * Auth model: raindb-api's authMiddleware gates `/api/
+   * marketplace/*`. Fetch calls MUST send `X-API-Key: <caller
+   * tenant key>` (the marketplace tools pull it from `ctx.creds.
+   * apiKey`). The caller identity is used for authn /
+   * observability only; the actual data source is the marketplace
+   * tenant, resolved server-side via `platform_marketplace_
+   * credential` (the credentialed cross-tenant pattern shipped in
+   * phoenix commit 2ee476a). The caller never sees the
+   * marketplace tenant's creds.
+   *
+   * Data layer: list reads use Tier 3 periscope SQL
+   * (`runMarketplaceSQL` against `entity."platform_marketplace_
+   * pack"`); detail reads use direct ReadLatest on by-vendor-
+   * pack-version / by-id-latest indexes (O+1 pattern). All of
+   * this happens inside the REST handler; from the agent tool's
+   * perspective the surface is plain HTTP GET.
+   *
+   * Required when calling marketplace tools (pack_list,
+   * pack_info, pack_get, pack_features, vendor_list,
+   * vendor_info). Absence is an explicit error per the
+   * "no fallbacks" principle, not a silent fallback to a
+   * default URL. Hosts populate this per turn from their
+   * env (fdn-app: `RAINDB_API_URL`, default
+   * http://localhost:8080; raindb-app: relative -- same host).
+   */
+  marketplaceBaseUrl?: string;
 }
 
 /**

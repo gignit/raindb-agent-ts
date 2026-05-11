@@ -1,17 +1,24 @@
-// pack_list.test.ts -- unit test for the marketplace pilot tool.
+// pack_list.test.ts -- unit test for the pack_list marketplace tool.
 //
-// We mock global fetch (the only thing executeGraphQL touches) so
-// the test is fully offline. The test verifies:
-//   1. The tool emits the expected ListDroplets GraphQL query +
-//      variables to raindb-api.
-//   2. The response is grouped by vendorPackKey, latest by
-//      publishedAt -- mirrors ops/marketplace.go::PackList.
-//   3. Filter args (vendor, category, usageIntent, search) winnow
-//      the result correctly.
-//   4. The returned array is sorted (vendor asc, packName asc).
+// Phase 6 refactor: pack_list now fetches from raindb-app's
+// /api/marketplace/packs REST endpoint instead of going through
+// raindb-api GraphQL. The shared package no longer reaches into
+// the marketplace droplets through per-tenant credentials -- the
+// marketplace is a "partner of the bridge" (anonymous-readable
+// REST surface served by raindb-app under its platform admin key).
 //
-// Mirrors the wire shape verified via:
-//   coder_go_function selector="^PackList$" cwd=~/src/raindb-phoenix-oc
+// We mock global fetch and verify:
+//   1. The tool hits ${marketplaceBaseUrl}/api/marketplace/packs
+//   2. Filter args (vendor, category, usageIntent, search) flow
+//      through as query-string params; the server is the canonical
+//      filter implementation.
+//   3. The response envelope ({tagline, packs}) is projected to
+//      the packs array.
+//   4. Missing marketplaceBaseUrl returns an explicit error per the
+//      "no fallbacks" principle.
+//
+// Mirrors wire shape verified empirically via:
+//   curl -s 'http://localhost:4000/api/marketplace/packs?search=guide'
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,21 +28,21 @@ import type { ToolContext } from '../../src/registry/types.js';
 
 interface FetchCallRecord {
   url: string;
-  body: { query: string; variables: Record<string, unknown> };
+  method?: string;
   headers: Record<string, string>;
 }
 
 function mockFetch(
   responseBody: unknown,
   recorder: FetchCallRecord[],
+  status = 200,
 ): typeof fetch {
   return async (input, init) => {
     const url = typeof input === 'string' ? input : (input as URL).toString();
-    const body = init?.body ? JSON.parse(String(init.body)) : null;
     const headers = (init?.headers as Record<string, string>) ?? {};
-    recorder.push({ url, body, headers });
+    recorder.push({ url, method: init?.method, headers });
     return new Response(JSON.stringify(responseBody), {
-      status: 200,
+      status,
       headers: { 'Content-Type': 'application/json' },
     });
   };
@@ -43,272 +50,181 @@ function mockFetch(
 
 function ctx(): ToolContext {
   return {
-    creds: {
-      apiKey: 'rdb_test_key',
-      endpoint: 'http://localhost:8080/graphql',
-    },
+    creds: { apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' },
     role: 'read',
+    marketplaceBaseUrl: 'http://localhost:4000',
   };
 }
 
-test('pack_list: builds ListDroplets query and groups by vendorPackKey', async () => {
+test('pack_list: GET /api/marketplace/packs with no filters', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = mockFetch(
     {
-      data: {
-        listDroplets: {
-          droplets: [
-            {
-              dropletId: 'd1',
-              formationId: 'platform_marketplace_pack',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'raindb',
-              payload: {
-                packId: 'p1',
-                vendor: 'raindb',
-                packName: 'social',
-                version: '1.0.0',
-                vendorPackKey: 'raindb-social',
-                title: 'Social Patterns',
-                category: 'social',
-                usageIntent: 'example',
-                publishedAt: '2026-01-02T00:00:00Z',
-                totalFiles: 29,
-                tags: ['social'],
-              },
-            },
-            {
-              dropletId: 'd2',
-              formationId: 'platform_marketplace_pack',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'raindb',
-              payload: {
-                packId: 'p1-v2',
-                vendor: 'raindb',
-                packName: 'social',
-                version: '1.0.1',
-                vendorPackKey: 'raindb-social',
-                title: 'Social Patterns',
-                category: 'social',
-                usageIntent: 'example',
-                publishedAt: '2026-01-03T00:00:00Z',
-                totalFiles: 30,
-                tags: ['social'],
-              },
-            },
-            {
-              dropletId: 'd3',
-              formationId: 'platform_marketplace_pack',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'raindb',
-              payload: {
-                packId: 'p2',
-                vendor: 'raindb',
-                packName: 'finance-transactions',
-                version: '1.0.0',
-                vendorPackKey: 'raindb-finance-transactions',
-                title: 'Finance: Transactions',
-                category: 'finance',
-                usageIntent: 'example',
-                publishedAt: '2026-01-02T00:00:00Z',
-                totalFiles: 4,
-                tags: ['finance'],
-              },
-            },
-          ],
-          hasMore: false,
+      tagline: 'RainDB Marketplace',
+      packs: [
+        {
+          packId: 'p1',
+          vendor: 'raindb',
+          packName: 'social',
+          version: '1.0.0',
+          vendorPackKey: 'raindb-social',
+          title: 'Social Patterns',
+          category: 'social',
+          usageIntent: 'example',
+          publishedAt: '2026-01-02T00:00:00Z',
+          totalFiles: 29,
+          tags: ['social'],
         },
-      },
+        {
+          packId: 'p2',
+          vendor: 'raindb',
+          packName: 'finance',
+          version: '1.0.0',
+          vendorPackKey: 'raindb-finance',
+          title: 'Finance Patterns',
+          category: 'finance',
+          usageIntent: 'example',
+          publishedAt: '2026-01-02T00:00:00Z',
+          totalFiles: 12,
+          tags: ['finance'],
+        },
+      ],
     },
     recorder,
   );
 
   try {
     const result = await pack_list.execute(ctx(), {});
-
-    // 1. Wire shape verification.
-    assert.equal(recorder.length, 1, 'exactly one GraphQL call');
-    assert.equal(recorder[0]!.url, 'http://localhost:8080/graphql');
-    assert.equal(recorder[0]!.headers['X-API-Key'], 'rdb_test_key');
-    assert.match(recorder[0]!.body.query, /listDroplets/);
-    assert.deepEqual(recorder[0]!.body.variables, {
-      input: {
-        formationId: 'platform_marketplace_pack',
-        prefix: 'entities/platform_marketplace_pack/',
-        pageSize: 200,
-      },
-    });
-
-    // 2. Grouping: two versions of raindb-social collapse to the
-    //    later-published one.
-    const arr = result as Array<{ vendor: string; packName: string; version: string }>;
+    assert.equal(recorder.length, 1);
+    assert.equal(recorder[0]!.url, 'http://localhost:4000/api/marketplace/packs');
+    assert.equal(recorder[0]!.method ?? 'GET', 'GET');
+    const arr = result as Array<{ packId: string }>;
     assert.equal(arr.length, 2);
-    const social = arr.find((p) => p.packName === 'social');
-    assert.ok(social, 'social pack present');
-    assert.equal(social.version, '1.0.1', 'kept the later-published version');
-
-    // 3. Sort: vendor asc, packName asc. Both packs are vendor=raindb
-    //    so finance-transactions sorts before social.
-    assert.equal(arr[0]!.packName, 'finance-transactions');
-    assert.equal(arr[1]!.packName, 'social');
+    assert.equal(arr[0]!.packId, 'p1');
   } finally {
     globalThis.fetch = original;
   }
 });
 
-test('pack_list: filters by category', async () => {
+test('pack_list: filters flow through as query-string params', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = mockFetch(
-    {
-      data: {
-        listDroplets: {
-          droplets: [
-            {
-              dropletId: 'd1',
-              formationId: 'platform_marketplace_pack',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'raindb',
-              payload: {
-                packId: 'p1',
-                vendor: 'raindb',
-                packName: 'social',
-                version: '1.0.0',
-                vendorPackKey: 'raindb-social',
-                category: 'social',
-                publishedAt: '2026-01-02T00:00:00Z',
-              },
-            },
-            {
-              dropletId: 'd2',
-              formationId: 'platform_marketplace_pack',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'raindb',
-              payload: {
-                packId: 'p2',
-                vendor: 'raindb',
-                packName: 'finance-transactions',
-                version: '1.0.0',
-                vendorPackKey: 'raindb-finance-transactions',
-                category: 'finance',
-                publishedAt: '2026-01-02T00:00:00Z',
-              },
-            },
-          ],
-          hasMore: false,
-        },
-      },
-    },
+    { tagline: '', packs: [] },
     recorder,
   );
 
   try {
-    const result = await pack_list.execute(ctx(), { category: 'finance' });
-    const arr = result as Array<{ packName: string; category: string }>;
-    assert.equal(arr.length, 1);
-    assert.equal(arr[0]!.packName, 'finance-transactions');
+    await pack_list.execute(ctx(), {
+      vendor: 'raindb',
+      category: 'social',
+      usageIntent: 'example',
+      search: 'patterns',
+    });
+    // URLSearchParams orders the keys in insertion order. We don't
+    // rely on the exact order across versions, just on presence.
+    const u = new URL(recorder[0]!.url);
+    assert.equal(u.pathname, '/api/marketplace/packs');
+    assert.equal(u.searchParams.get('vendor'), 'raindb');
+    assert.equal(u.searchParams.get('category'), 'social');
+    assert.equal(u.searchParams.get('usageIntent'), 'example');
+    assert.equal(u.searchParams.get('search'), 'patterns');
   } finally {
     globalThis.fetch = original;
   }
 });
 
-test('pack_list: free-text search hits title/description/tags', async () => {
+test('pack_list: empty filters produce no query string', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch(
-    {
-      data: {
-        listDroplets: {
-          droplets: [
-            {
-              dropletId: 'd1',
-              formationId: 'platform_marketplace_pack',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'raindb',
-              payload: {
-                packId: 'p1',
-                vendor: 'raindb',
-                packName: 'real-estate-listings',
-                version: '1.0.0',
-                vendorPackKey: 'raindb-real-estate-listings',
-                title: 'Real Estate: Property Listings',
-                publishedAt: '2026-01-02',
-              },
-            },
-            {
-              dropletId: 'd2',
-              formationId: 'platform_marketplace_pack',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'raindb',
-              payload: {
-                packId: 'p2',
-                vendor: 'raindb',
-                packName: 'media-photos',
-                version: '1.0.0',
-                vendorPackKey: 'raindb-media-photos',
-                title: 'Media: Photos & Albums',
-                publishedAt: '2026-01-02',
-              },
-            },
-          ],
-          hasMore: false,
-        },
-      },
-    },
-    recorder,
-  );
+  globalThis.fetch = mockFetch({ tagline: '', packs: [] }, recorder);
 
   try {
-    const result = await pack_list.execute(ctx(), { search: 'photo' });
-    const arr = result as Array<{ packName: string }>;
-    assert.equal(arr.length, 1);
-    assert.equal(arr[0]!.packName, 'media-photos');
+    await pack_list.execute(ctx(), {
+      vendor: '',
+      category: '',
+      search: '',
+    });
+    // No query string -- empty-string filters are dropped.
+    assert.equal(recorder[0]!.url, 'http://localhost:4000/api/marketplace/packs');
   } finally {
     globalThis.fetch = original;
   }
 });
 
-test('pack_list: pageSize override flows to GraphQL variables', async () => {
+test('pack_list: empty response envelope returns []', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch(
-    { data: { listDroplets: { droplets: [], hasMore: false } } },
-    recorder,
-  );
+  globalThis.fetch = mockFetch({ tagline: '' }, recorder); // no packs field
 
   try {
-    await pack_list.execute(ctx(), { pageSize: 50 });
-    assert.equal(
-      (recorder[0]!.body.variables.input as { pageSize: number }).pageSize,
-      50,
+    const result = await pack_list.execute(ctx(), {});
+    assert.deepEqual(result, []);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('pack_list: missing marketplaceBaseUrl returns explicit error (no fallback)', async () => {
+  const recorder: FetchCallRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = mockFetch({ tagline: '', packs: [] }, recorder);
+
+  try {
+    const noMarketCtx: ToolContext = {
+      creds: { apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' },
+      role: 'read',
+      // marketplaceBaseUrl deliberately omitted
+    };
+    const result = await pack_list.execute(noMarketCtx, {});
+    assert.ok(result && typeof result === 'object' && 'error' in result);
+    assert.match((result as { error: string }).error, /marketplaceBaseUrl required/);
+    assert.equal(recorder.length, 0, 'no fetch call when context invalid');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('pack_list: trailing slash on marketplaceBaseUrl is stripped', async () => {
+  const recorder: FetchCallRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = mockFetch({ tagline: '', packs: [] }, recorder);
+
+  try {
+    const ctxWithSlash: ToolContext = {
+      creds: { apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' },
+      role: 'read',
+      marketplaceBaseUrl: 'http://localhost:4000///',
+    };
+    await pack_list.execute(ctxWithSlash, {});
+    assert.equal(recorder[0]!.url, 'http://localhost:4000/api/marketplace/packs');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('pack_list: HTTP error from marketplace surfaces as RaindbError', async () => {
+  const recorder: FetchCallRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = mockFetch({ error: 'internal' }, recorder, 500);
+
+  try {
+    await assert.rejects(
+      pack_list.execute(ctx(), {}),
+      /marketplace fetch failed \(HTTP 500\)/,
     );
   } finally {
     globalThis.fetch = original;
   }
 });
 
-test('pack_list: tool metadata matches Go reference', () => {
-  // These checks ensure the wire surface stays in lockstep with
-  // raindb-phoenix-oc/internal/ai/tools_marketplace.go::tenantMarketplaceTools
-  // pack_list entry. If the Go side changes, these break first.
+test('pack_list: tool metadata matches marketplace surface', () => {
   assert.equal(pack_list.name, 'pack_list');
   assert.equal(pack_list.minRole, 'read');
   assert.ok(!pack_list.modifiesResource);
   assert.equal(pack_list.parameters.type, 'object');
-  const props = pack_list.parameters.properties ?? {};
-  assert.ok('vendor' in props);
-  assert.ok('category' in props);
-  assert.ok('usageIntent' in props);
-  assert.ok('search' in props);
-  assert.ok('pageSize' in props);
-  // pack_list is read-only; it has NO required fields.
-  assert.equal(pack_list.parameters.required?.length ?? 0, 0);
+  // No required filter params -- pack_list with no args returns the full
+  // (server-filter-default) catalog.
+  assert.ok(!pack_list.parameters.required || pack_list.parameters.required.length === 0);
 });

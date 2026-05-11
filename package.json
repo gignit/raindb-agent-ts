@@ -1,6 +1,6 @@
 {
   "name": "@raindb/agent",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Shared TypeScript agent runtime + tool catalog for RainDB consumer apps (fdn-app, raindb-app). Mirrors raindb-phoenix-oc/internal/ai/.",
   "private": true,
   "type": "module",

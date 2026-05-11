@@ -1,6 +1,9 @@
 // marketplace_extra.test.ts -- pack_info, pack_get, pack_features,
-// vendor_list, vendor_info tool tests. (pack_list is in
-// pack_list.test.ts since it shipped in M1.)
+// vendor_list, vendor_info tool tests. Phase 6 refactor: all tools
+// fetch from raindb-app's /api/marketplace/* REST endpoint instead
+// of raindb-api GraphQL.
+//
+// pack_list has its own test file (pack_list.test.ts).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,19 +19,18 @@ import type { ToolContext } from '../../src/registry/types.js';
 
 interface FetchCallRecord {
   url: string;
-  body: { query: string; variables: Record<string, unknown> };
 }
 
 function mockFetch(
   responseBody: unknown,
   recorder: FetchCallRecord[],
+  status = 200,
 ): typeof fetch {
-  return async (input, init) => {
+  return async (input) => {
     const url = typeof input === 'string' ? input : (input as URL).toString();
-    const body = init?.body ? JSON.parse(String(init.body)) : null;
-    recorder.push({ url, body });
+    recorder.push({ url });
     return new Response(JSON.stringify(responseBody), {
-      status: 200,
+      status,
       headers: { 'Content-Type': 'application/json' },
     });
   };
@@ -36,15 +38,13 @@ function mockFetch(
 
 function ctx(): ToolContext {
   return {
-    creds: {
-      apiKey: 'rdb_test',
-      endpoint: 'http://localhost:8080/graphql',
-    },
+    creds: { apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' },
     role: 'read',
+    marketplaceBaseUrl: 'http://localhost:4000',
   };
 }
 
-const FULL_PACK_PAYLOAD = {
+const FULL_PACK = {
   packId: '019e0e57-1cff-7c90-afb7-46b33759826a',
   vendor: 'raindb',
   packName: 'social',
@@ -67,8 +67,6 @@ const FULL_PACK_PAYLOAD = {
   tokenEstimate: 12_000,
   publishedAt: '2026-05-09T20:04:10Z',
   updatedAt: '',
-  triggerPatterns: [],
-  dependencySignals: [],
   readme: '# Social Patterns\n\n...',
   features: [
     { id: 'core', displayName: 'Core', description: 'Posts + users.', default: true, requires: [] },
@@ -84,57 +82,33 @@ const FULL_PACK_PAYLOAD = {
 // pack_info
 // ---------------------------------------------------------------------------
 
-test('pack_info: latest -> by-vendor-pack-latest index', async () => {
+test('pack_info: latest -> /api/marketplace/packs/<vendor>/<pack>', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch(
-    {
-      data: {
-        readLatest: {
-          dropletId: 'd1',
-          formationId: 'platform_marketplace_pack',
-          ts: '2026-05-09',
-          payload: FULL_PACK_PAYLOAD,
-        },
-      },
-    },
-    recorder,
-  );
+  globalThis.fetch = mockFetch({ pack: FULL_PACK }, recorder);
 
   try {
-    const result = await pack_info.execute(ctx(), {
+    const r = await pack_info.execute(ctx(), {
       vendor: 'raindb',
       packName: 'social',
     });
-    assert.match(recorder[0]!.body.query, /readLatest/);
-    const input = recorder[0]!.body.variables['input'] as Record<string, string>;
-    assert.equal(input['formationId'], 'platform_marketplace_pack');
-    assert.equal(input['indexId'], 'by-vendor-pack-latest');
-    assert.equal(input['scopeValue'], 'raindb-social');
-    const r = result as { packId: string; features: Array<{ id: string }> };
-    assert.equal(r.packId, '019e0e57-1cff-7c90-afb7-46b33759826a');
-    assert.equal(r.features.length, 2);
+    assert.equal(recorder.length, 1);
+    assert.equal(
+      recorder[0]!.url,
+      'http://localhost:4000/api/marketplace/packs/raindb/social',
+    );
+    const p = r as { packId: string; features: Array<{ id: string }> };
+    assert.equal(p.packId, FULL_PACK.packId);
+    assert.equal(p.features.length, 2);
   } finally {
     globalThis.fetch = original;
   }
 });
 
-test('pack_info: pinned version -> by-vendor-pack-version index', async () => {
+test('pack_info: pinned version -> ?version=<v>', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch(
-    {
-      data: {
-        readLatest: {
-          dropletId: 'd1',
-          formationId: 'platform_marketplace_pack',
-          ts: '2026-05-09',
-          payload: FULL_PACK_PAYLOAD,
-        },
-      },
-    },
-    recorder,
-  );
+  globalThis.fetch = mockFetch({ pack: FULL_PACK }, recorder);
 
   try {
     await pack_info.execute(ctx(), {
@@ -142,18 +116,18 @@ test('pack_info: pinned version -> by-vendor-pack-version index', async () => {
       packName: 'social',
       version: '1.0.0',
     });
-    const input = recorder[0]!.body.variables['input'] as Record<string, string>;
-    assert.equal(input['indexId'], 'by-vendor-pack-version');
-    assert.equal(input['scopeValue'], 'raindb-social-1.0.0');
+    const u = new URL(recorder[0]!.url);
+    assert.equal(u.pathname, '/api/marketplace/packs/raindb/social');
+    assert.equal(u.searchParams.get('version'), '1.0.0');
   } finally {
     globalThis.fetch = original;
   }
 });
 
-test('pack_info: missing required args returns error', async () => {
+test('pack_info: missing required args returns error (no fetch)', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch({ data: {} }, recorder);
+  globalThis.fetch = mockFetch({}, recorder);
 
   try {
     const r = await pack_info.execute(ctx(), { vendor: 'raindb' });
@@ -164,10 +138,10 @@ test('pack_info: missing required args returns error', async () => {
   }
 });
 
-test('pack_info: 404 surfaces as error string', async () => {
+test('pack_info: 404 surfaces as friendly error', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch({ data: { readLatest: null } }, recorder);
+  globalThis.fetch = mockFetch({ error: 'pack not found' }, recorder, 404);
 
   try {
     const r = await pack_info.execute(ctx(), {
@@ -180,26 +154,51 @@ test('pack_info: 404 surfaces as error string', async () => {
   }
 });
 
+test('pack_info: 404 with version pin includes version in error', async () => {
+  const recorder: FetchCallRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = mockFetch({ error: 'not found' }, recorder, 404);
+
+  try {
+    const r = await pack_info.execute(ctx(), {
+      vendor: 'raindb',
+      packName: 'social',
+      version: '99.0.0',
+    });
+    assert.deepEqual(r, { error: 'pack not found: raindb/social@99.0.0' });
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('pack_info: vendor/pack names URL-encoded', async () => {
+  const recorder: FetchCallRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = mockFetch({ pack: FULL_PACK }, recorder);
+
+  try {
+    await pack_info.execute(ctx(), {
+      vendor: 'acme corp',
+      packName: 'a/b',
+    });
+    // Spaces + slashes get percent-encoded
+    assert.equal(
+      recorder[0]!.url,
+      'http://localhost:4000/api/marketplace/packs/acme%20corp/a%2Fb',
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 // ---------------------------------------------------------------------------
-// pack_get
+// pack_get -- alias to pack_info
 // ---------------------------------------------------------------------------
 
 test('pack_get: behaves identically to pack_info (alias)', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch(
-    {
-      data: {
-        readLatest: {
-          dropletId: 'd1',
-          formationId: 'platform_marketplace_pack',
-          ts: '2026-05-09',
-          payload: FULL_PACK_PAYLOAD,
-        },
-      },
-    },
-    recorder,
-  );
+  globalThis.fetch = mockFetch({ pack: FULL_PACK }, recorder);
 
   try {
     const r = await pack_get.execute(ctx(), {
@@ -209,7 +208,6 @@ test('pack_get: behaves identically to pack_info (alias)', async () => {
     const p = r as { vendor: string; packName: string };
     assert.equal(p.vendor, 'raindb');
     assert.equal(p.packName, 'social');
-    // Same execute reference so same wire shape.
     assert.equal(pack_get.execute, pack_info.execute);
   } finally {
     globalThis.fetch = original;
@@ -217,25 +215,13 @@ test('pack_get: behaves identically to pack_info (alias)', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// pack_features
+// pack_features -- delegates to pack_info, projects to features[]
 // ---------------------------------------------------------------------------
 
-test('pack_features: projects pack_info result to features array', async () => {
+test('pack_features: projects pack to features[]', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch(
-    {
-      data: {
-        readLatest: {
-          dropletId: 'd1',
-          formationId: 'platform_marketplace_pack',
-          ts: '2026-05-09',
-          payload: FULL_PACK_PAYLOAD,
-        },
-      },
-    },
-    recorder,
-  );
+  globalThis.fetch = mockFetch({ pack: FULL_PACK }, recorder);
 
   try {
     const r = await pack_features.execute(ctx(), {
@@ -255,7 +241,7 @@ test('pack_features: projects pack_info result to features array', async () => {
 test('pack_features: surfaces pack_info errors verbatim', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch({ data: { readLatest: null } }, recorder);
+  globalThis.fetch = mockFetch({ error: 'nf' }, recorder, 404);
 
   try {
     const r = await pack_features.execute(ctx(), {
@@ -272,71 +258,44 @@ test('pack_features: surfaces pack_info errors verbatim', async () => {
 // vendor_list
 // ---------------------------------------------------------------------------
 
-test('vendor_list: dedupes by vendorId + sorts asc', async () => {
+test('vendor_list: GET /api/marketplace/vendors -> vendors array', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = mockFetch(
     {
-      data: {
-        listDroplets: {
-          droplets: [
-            {
-              dropletId: 'd2',
-              formationId: 'platform_marketplace_vendor',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'platform',
-              payload: { vendorId: 'stripe', displayName: 'Stripe', verified: true },
-            },
-            {
-              dropletId: 'd1',
-              formationId: 'platform_marketplace_vendor',
-              schemaVersion: 1,
-              ts: '2026-01-01',
-              author: 'platform',
-              payload: { vendorId: 'raindb', displayName: 'RainDB', verified: true },
-            },
-            // duplicate vendorId -- should be deduped
-            {
-              dropletId: 'd1b',
-              formationId: 'platform_marketplace_vendor',
-              schemaVersion: 1,
-              ts: '2026-01-02',
-              author: 'platform',
-              payload: { vendorId: 'raindb', displayName: 'RainDB v2', verified: true },
-            },
-          ],
-          hasMore: false,
+      tagline: 'RainDB Marketplace',
+      vendors: [
+        {
+          vendorId: 'raindb',
+          displayName: 'RainDB',
+          description: 'Platform vendor',
+          verified: true,
+          license: 'MIT',
         },
-      },
+      ],
     },
     recorder,
   );
 
   try {
     const r = await vendor_list.execute(ctx(), {});
+    assert.equal(recorder[0]!.url, 'http://localhost:4000/api/marketplace/vendors');
     const arr = r as Array<{ vendorId: string }>;
-    assert.equal(arr.length, 2, 'duplicate vendorId removed');
-    assert.equal(arr[0]!.vendorId, 'raindb', 'sorted asc');
-    assert.equal(arr[1]!.vendorId, 'stripe');
+    assert.equal(arr.length, 1);
+    assert.equal(arr[0]!.vendorId, 'raindb');
   } finally {
     globalThis.fetch = original;
   }
 });
 
-test('vendor_list: emits ListDroplets query against vendor formation', async () => {
+test('vendor_list: empty envelope returns []', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch(
-    { data: { listDroplets: { droplets: [], hasMore: false } } },
-    recorder,
-  );
+  globalThis.fetch = mockFetch({ tagline: '' }, recorder); // no vendors
 
   try {
-    await vendor_list.execute(ctx(), {});
-    const input = recorder[0]!.body.variables['input'] as Record<string, unknown>;
-    assert.equal(input['formationId'], 'platform_marketplace_vendor');
-    assert.equal(input['prefix'], 'entities/platform_marketplace_vendor/');
+    const r = await vendor_list.execute(ctx(), {});
+    assert.deepEqual(r, []);
   } finally {
     globalThis.fetch = original;
   }
@@ -346,24 +305,17 @@ test('vendor_list: emits ListDroplets query against vendor formation', async () 
 // vendor_info
 // ---------------------------------------------------------------------------
 
-test('vendor_info: emits readLatest with by-id-latest index', async () => {
+test('vendor_info: GET /api/marketplace/vendors/<id>', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = mockFetch(
     {
-      data: {
-        readLatest: {
-          dropletId: 'd1',
-          formationId: 'platform_marketplace_vendor',
-          ts: '2026-01-01',
-          payload: {
-            vendorId: 'raindb',
-            displayName: 'RainDB',
-            description: 'Platform vendor',
-            verified: true,
-            license: 'MIT',
-          },
-        },
+      vendor: {
+        vendorId: 'raindb',
+        displayName: 'RainDB',
+        description: 'Platform vendor',
+        verified: true,
+        license: 'MIT',
       },
     },
     recorder,
@@ -371,10 +323,10 @@ test('vendor_info: emits readLatest with by-id-latest index', async () => {
 
   try {
     const r = await vendor_info.execute(ctx(), { vendorId: 'raindb' });
-    const input = recorder[0]!.body.variables['input'] as Record<string, string>;
-    assert.equal(input['formationId'], 'platform_marketplace_vendor');
-    assert.equal(input['indexId'], 'by-id-latest');
-    assert.equal(input['scopeValue'], 'raindb');
+    assert.equal(
+      recorder[0]!.url,
+      'http://localhost:4000/api/marketplace/vendors/raindb',
+    );
     const v = r as { vendorId: string; verified: boolean; license?: string };
     assert.equal(v.vendorId, 'raindb');
     assert.equal(v.verified, true);
@@ -384,10 +336,10 @@ test('vendor_info: emits readLatest with by-id-latest index', async () => {
   }
 });
 
-test('vendor_info: missing vendorId returns error', async () => {
+test('vendor_info: missing vendorId returns error (no fetch)', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch({ data: {} }, recorder);
+  globalThis.fetch = mockFetch({}, recorder);
 
   try {
     const r = await vendor_info.execute(ctx(), {});
@@ -398,10 +350,10 @@ test('vendor_info: missing vendorId returns error', async () => {
   }
 });
 
-test('vendor_info: 404 surfaces as error string', async () => {
+test('vendor_info: 404 surfaces as friendly error', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
-  globalThis.fetch = mockFetch({ data: { readLatest: null } }, recorder);
+  globalThis.fetch = mockFetch({ error: 'nf' }, recorder, 404);
 
   try {
     const r = await vendor_info.execute(ctx(), { vendorId: 'unknown' });
