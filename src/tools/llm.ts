@@ -4,8 +4,8 @@
 // Mirrors raindb-phoenix-oc/internal/ai/tools_llm.go::tenantLLMTools.
 // 3 tenant-scoped tools (admin reconcile/vendor variants excluded).
 //
-//   llm_provider_list -- list platform_llm_provider entries
-//   llm_model_list    -- list platform_llm_model entries
+//   llm_provider_list -- list platform-llm-provider entries
+//   llm_model_list    -- list platform-llm-model entries
 //   llm_usage_report_summary -- aggregated cost report
 
 import { executeGraphQL } from '../client/graphql.js';
@@ -13,8 +13,17 @@ import { executeSQL } from '../client/sql.js';
 import { intArg } from '../registry/build.js';
 import type { RegisteredTool } from '../registry/types.js';
 
-const PROVIDER_FORMATION = 'platform_llm_provider';
-const MODEL_FORMATION = 'platform_llm_model';
+// Canonical hyphenated formation ids -- the public agent-facing contract.
+// raindb-api stores these formations at
+//   indexes/platform-llm-provider/by-id/...
+//   indexes/platform-llm-model/by-id/...
+// The DuckDB-internal underscored form ("platform_llm_model") is a
+// server-side translation handled by formation.FormationIDSafe; clients
+// must NEVER send the underscored form -- a listKeys against
+// `indexes/platform_llm_model/by-id/` returns zero results because
+// nothing is stored there.
+const PROVIDER_FORMATION = 'platform-llm-provider';
+const MODEL_FORMATION = 'platform-llm-model';
 
 // Both list ops walk the by-id index and project each pointer to
 // the underlying droplet. We use listKeys on the by-id prefix +
@@ -133,7 +142,7 @@ export const llm_provider_list: RegisteredTool = {
   name: 'llm_provider_list',
   description:
     'List every LLM provider available to this tenant (entries from '
-    + 'the platform_llm_provider formation). Equivalent CLI: '
+    + 'the platform-llm-provider formation). Equivalent CLI: '
     + 'raindb-cli llm provider list',
   minRole: 'read',
   parameters: { type: 'object' },
@@ -151,7 +160,7 @@ export const llm_model_list: RegisteredTool = {
   name: 'llm_model_list',
   description:
     'List every LLM model available to this tenant (entries from '
-    + 'the platform_llm_model formation). Equivalent CLI: '
+    + 'the platform-llm-model formation). Equivalent CLI: '
     + 'raindb-cli llm model list',
   minRole: 'read',
   parameters: { type: 'object' },
@@ -224,7 +233,12 @@ export const llm_usage_report_summary: RegisteredTool = {
     WHERE ${where}
     GROUP BY date, model, provider, dimension
     ORDER BY date DESC, platform_cost DESC`;
-    const result = await executeSQL(sql, 'platform_usage_event', ctx.creds);
+    // Canonical hyphenated formationId for the executeSQL prelude
+    // (server-side LoadFormation expects canonical). The SQL body
+    // above references `entity."platform_usage_event"` which is the
+    // DuckDB view name (= FormationIDSafe, underscored). Both are
+    // correct in their respective layers.
+    const result = await executeSQL(sql, 'platform-usage-event', ctx.creds);
     const rows: LLMUsageReportRow[] = result.rows.map((row) => ({
       date: row[0] ?? '',
       model: row[1] ?? '',

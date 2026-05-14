@@ -105,7 +105,11 @@ export const usage_list: RegisteredTool = {
     WHERE ${where}
     ORDER BY timestamp DESC
     LIMIT ${limit}`;
-    const result = await executeSQL(sql, 'platform_usage_event', ctx.creds);
+    // Canonical hyphenated formationId for the executeSQL prelude
+    // (server-side LoadFormation). SQL body references the DuckDB
+    // view name `entity."platform_usage_event"` (FormationIDSafe,
+    // underscored). Both are correct in their layers.
+    const result = await executeSQL(sql, 'platform-usage-event', ctx.creds);
     const events: UsageEvent[] = result.rows.map((row) => ({
       timestamp: row[0] ?? '',
       service: row[1] ?? '',
@@ -152,7 +156,9 @@ export const usage_summary: RegisteredTool = {
     WHERE ${where}
     GROUP BY serviceId, dimension, unit
     ORDER BY serviceId, dimension`;
-    const result = await executeSQL(sql, 'platform_usage_event', ctx.creds);
+    // Canonical hyphenated formationId for the executeSQL prelude;
+    // SQL body uses entity."platform_usage_event" (DuckDB view name).
+    const result = await executeSQL(sql, 'platform-usage-event', ctx.creds);
     const rows: UsageSummaryRow[] = result.rows.map((row) => ({
       service: row[0] ?? '',
       dimension: row[1] ?? '',

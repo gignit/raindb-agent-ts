@@ -729,7 +729,7 @@ export const droplet_bulk_update: RegisteredTool = {
       scopeKey: {
         type: 'string',
         description:
-          "Payload field whose value locates the existing droplet (e.g., 'modelId' for platform_llm_model)",
+          "Payload field whose value locates the existing droplet (e.g., 'modelId' for platform-llm-model)",
       },
       entries: {
         type: 'array',

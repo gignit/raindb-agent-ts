@@ -82,7 +82,11 @@ test('usage_list: emits executeSQL with formationId scope', async () => {
   try {
     const r = await usage_list.execute(ctx(), { service: 'llm', limit: 50 });
     const input = recorder[0]!.body.variables['input'] as Record<string, unknown>;
-    assert.equal(input['formationId'], 'platform_usage_event');
+    // Canonical hyphenated formationId for the executeSQL prelude
+    // (server-side LoadFormation expects canonical). SQL body uses
+    // entity."platform_usage_event" which is the DuckDB view name
+    // (= FormationIDSafe, underscored translation).
+    assert.equal(input['formationId'], 'platform-usage-event');
     const sql = String(input['sql']);
     assert.match(sql, /SELECT/);
     assert.match(sql, /serviceId = 'llm'/);
@@ -199,8 +203,8 @@ test('llm_model_list: handles nested ids (e.g. fdn/sonnet)', async () => {
         data: {
           listKeys: {
             keys: [
-              { key: 'tenants/x/indexes/platform_llm_model/by-id/fdn/sonnet/latest.json' },
-              { key: 'tenants/x/indexes/platform_llm_model/by-id/fdn/embed/latest.json' },
+              { key: 'tenants/x/indexes/platform-llm-model/by-id/fdn/sonnet/latest.json' },
+              { key: 'tenants/x/indexes/platform-llm-model/by-id/fdn/embed/latest.json' },
             ],
             nextCursor: null,
             hasMore: false,
@@ -236,9 +240,9 @@ test('llm_model_list: skips individual read failures (does not abort)', async ()
         data: {
           listKeys: {
             keys: [
-              { key: 'indexes/platform_llm_model/by-id/good/latest.json' },
-              { key: 'indexes/platform_llm_model/by-id/bad/latest.json' },
-              { key: 'indexes/platform_llm_model/by-id/also-good/latest.json' },
+              { key: 'indexes/platform-llm-model/by-id/good/latest.json' },
+              { key: 'indexes/platform-llm-model/by-id/bad/latest.json' },
+              { key: 'indexes/platform-llm-model/by-id/also-good/latest.json' },
             ],
             nextCursor: null,
             hasMore: false,

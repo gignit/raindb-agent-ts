@@ -150,7 +150,7 @@ export async function resolveDefaultChatModel(
   if (!m) {
     throw new Error(
       'resolveDefaultChatModel: raindb registry has no model with chat capability '
-      + '(check platform_llm_model + platform_config_llm seeds)',
+      + '(check platform-llm-model + platform-config-llm seeds)',
     );
   }
   return m;
