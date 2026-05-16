@@ -1,5 +1,5 @@
-// loop/index.ts -- the agent loop. Runs over openai-node's
-// /v1/chat/completions surface against raindb-api.
+// loop/index.ts -- the agent loop. Runs over an AgentHost's
+// chatCompletion surface.
 //
 // Extracted from fdn-app/server/src/services/agentLoop.ts. The
 // generic loop here drops fdn-app-specific machinery (side-effect
@@ -9,7 +9,7 @@
 //
 // The loop:
 //   1. Send system prompt + history + user prompt to
-//      ai.chat.completions.create
+//      ctx.host.chatCompletion()
 //   2. If the response carries tool_calls: execute each via
 //      `findTool`, append a `{role:'tool', tool_call_id,
 //      content: JSON.stringify(result)}` message, then loop.
@@ -18,9 +18,18 @@
 //   4. Iteration cap prevents runaways. Default 50; callers can
 //      override per-request and the host can configure a higher
 //      ceiling via `maxIterations`.
+//
+// Host independence: the loop has zero knowledge of openai-node,
+// global fetch, or any provider's API shape. ctx.host's
+// chatCompletion call drives every LLM round-trip. Node consumers
+// inject makeNodeHost(creds) (which wraps openai-node); Lightning
+// bolt consumers inject a goja-side host that calls ctx.fetch.
 
-import type OpenAI from 'openai';
-
+import type {
+  ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+  ChatCompletionTool,
+} from '../host/types.js';
 import type {
   AgentEvent,
   RegisteredTool,
@@ -29,17 +38,13 @@ import type {
   ToolContext,
   ToolEvent,
 } from '../registry/types.js';
+import { ensureHost } from '../registry/ensureHost.js';
 import {
   buildToolDefs,
   defaultRoleAllows,
   findTool,
 } from '../registry/build.js';
-import {
-  makeRaindbAiClient,
-  resolveDefaultChatModel,
-} from '../client/raindbAi.js';
-
-type ChatMessageParam = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+import { resolveDefaultChatModel } from '../client/raindbAi.js';
 
 /**
  * Hard cap so a misconfigured platform_config_llm or a runaway
@@ -61,7 +66,7 @@ export interface RunAgentOptions {
    * must be a system/user/assistant param (no `tool` role -- tool
    * results are reconstructed by the agent loop on each turn).
    */
-  history?: ChatMessageParam[];
+  history?: ChatCompletionMessageParam[];
   /** Per-turn execution context populated by the host. */
   ctx: ToolContext;
   /**
@@ -102,7 +107,7 @@ export interface AgentResult {
    * tool results from this turn. Hosts can persist subsets of this
    * for follow-up runs.
    */
-  history: ChatMessageParam[];
+  history: ChatCompletionMessageParam[];
   /** Per-tool-call records useful for chat-history persistence. */
   toolEvents: ToolEvent[];
 }
@@ -119,35 +124,46 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
   // Build the initial message stack: system prompt first, then
   // any prior conversation history, then the user's new prompt.
-  const messages: ChatMessageParam[] = [
+  const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: opts.systemPrompt },
     ...(opts.history ?? []),
     { role: 'user', content: opts.userPrompt },
   ];
 
+  // Normalize ctx so host is populated. Node consumers who built
+  // the ctx without a host get a Node host auto-filled; bolt
+  // consumers and tests that pre-populate host pass through
+  // unchanged.
+  const ctx = ensureHost(opts.ctx);
+
   const catalog = opts.tools ?? [];
-  const tools = buildToolDefs(catalog, opts.ctx.role, defaultRoleAllows);
+  const tools = buildToolDefs(catalog, ctx.role, defaultRoleAllows);
 
   const toolEvents: ToolEvent[] = [];
   let totalToolCalls = 0;
 
   const maxIterations = clampIterations(opts.maxIterations);
 
-  const ai = makeRaindbAiClient(opts.ctx.creds);
-
   // Resolve the chat model once per turn. Switching models mid-loop
   // would make the conversation history incoherent.
   const model = opts.model
-    ?? (await resolveDefaultChatModel(opts.ctx.creds));
+    ?? (await resolveDefaultChatModel(ctx.creds, ctx.host));
+
+  // openai-spec ChatCompletionTool shape forwarded verbatim to
+  // host.chatCompletion. buildToolDefs returns openai-node's typed
+  // shape; cast to our internal ChatCompletionTool (structurally
+  // identical -- both are {type: 'function', function: {name,
+  // description?, parameters}}).
+  const chatTools: ChatCompletionTool[] = tools as unknown as ChatCompletionTool[];
 
   for (let iter = 1; iter <= maxIterations; iter += 1) {
     onEvent({ type: 'thinking', iteration: iter });
 
-    const completion = await ai.chat.completions.create({
+    const completion = await ctx.host.chatCompletion({
       model,
       temperature: 0.2,
       messages,
-      tools: tools.length > 0 ? tools : undefined,
+      tools: chatTools.length > 0 ? chatTools : undefined,
     });
 
     const choice = completion.choices[0];
@@ -251,7 +267,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       if (tool.modifiesResource && opts.confirm) {
         let allowed = false;
         try {
-          allowed = await opts.confirm({ toolName, args: callArgs, ctx: opts.ctx });
+          allowed = await opts.confirm({ toolName, args: callArgs, ctx });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           onEvent({ type: 'tool-error', iteration: iter, toolName, error: `confirm callback threw: ${errMsg}` });
@@ -272,7 +288,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
 
       const t0 = Date.now();
       try {
-        const result = await tool.execute(opts.ctx, callArgs);
+        const result = await tool.execute(ctx, callArgs);
         const text = JSON.stringify(result);
         const preview = text.length > 200 ? text.slice(0, 200) + '...' : text;
         onEvent({

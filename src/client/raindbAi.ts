@@ -1,60 +1,25 @@
-// raindbAi.ts -- canonical openai-node client pointed at raindb's
-// /v1/* surface.
+// raindbAi.ts -- default-model resolution against raindb-api's
+// llmRegistry GraphQL query.
 //
-// Extracted from fdn-app/server/src/raindbAi.ts. Same wire
-// contract: openai-node sends `Authorization: Bearer <apiKey>`,
-// raindb-api accepts that AND `X-API-Key: <apiKey>` for legacy
-// callers. The library uses Bearer; raindb-api's auth middleware
-// sniffs the rdb_ prefix and routes through the API-key validator.
+// Historical note: this file used to also export
+// `makeRaindbAiClient`, a thin wrapper around openai-node pointed
+// at raindb's /v1/* surface. That was removed in the
+// goja-host-adapter refactor in favor of the AgentHost surface --
+// hosts now expose `chatCompletion` directly, and the Node host
+// (src/host/node.ts::makeNodeHost) wraps openai-node internally.
+// Callers that need to make a chat completion call call
+// `ctx.host.chatCompletion(req)` instead of constructing an
+// openai-node client themselves.
 //
-// The package never reads process.env -- callers (fdn-app,
-// raindb-app, future consumers) pass apiKey + endpoint explicitly
-// per the leaf-layer rule.
+// resolveDefaultModel + resolveDefaultChatModel survive because they
+// resolve via GraphQL (not via the LLM provider's API) and the
+// agent loop uses them to pick a chat model when the caller hasn't
+// specified one explicitly. Both accept a host so the GraphQL call
+// goes through the same AgentHost transport every other call uses.
 
-import OpenAI from 'openai';
-
-import type { GraphQLOptions } from '../registry/types.js';
 import { executeGraphQL } from './graphql.js';
-
-/**
- * Derive the openai-node baseURL from the GraphQL endpoint.
- *
- * raindb-api hosts both the GraphQL surface (`/graphql`) and the
- * openai-spec REST surface (`/v1/*`) on the same origin. Hosts
- * conventionally pass `creds.endpoint` as the GraphQL URL; this
- * helper strips the trailing `/graphql` and appends `/v1` to
- * produce the openai-node-friendly base.
- */
-function deriveOpenAIBaseURL(graphqlEndpoint: string): string {
-  return graphqlEndpoint.replace(/\/graphql\/?$/, '') + '/v1';
-}
-
-/**
- * Construct an openai-node client pointed at raindb's /v1/* REST
- * surface, authenticated as the supplied tenant. Cheap to call per
- * request; openai-node pools HTTP connections internally.
- *
- * Usage:
- *   const ai = makeRaindbAiClient(ctx.creds);
- *   const completion = await ai.chat.completions.create({
- *     model: 'fdn/sonnet',
- *     messages: [{ role: 'user', content: 'hi' }],
- *   });
- *
- * @throws when creds.apiKey or creds.endpoint is missing.
- */
-export function makeRaindbAiClient(creds: GraphQLOptions): OpenAI {
-  if (!creds.apiKey) {
-    throw new Error('makeRaindbAiClient: creds.apiKey required');
-  }
-  if (!creds.endpoint) {
-    throw new Error('makeRaindbAiClient: creds.endpoint required');
-  }
-  return new OpenAI({
-    apiKey: creds.apiKey,
-    baseURL: deriveOpenAIBaseURL(creds.endpoint),
-  });
-}
+import type { AgentHost } from '../host/types.js';
+import type { GraphQLOptions } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
 // Default-model resolution via the llmRegistry GraphQL query.
@@ -102,10 +67,17 @@ const defaultsCache = new Map<string, CachedDefaults>();
  * Returns null when the registry has no model satisfying the
  * capability. The caller MUST surface an error -- there's no
  * fallback to invent here per the package's no-fallback discipline.
+ *
+ * @param creds      Tenant credentials (apiKey + endpoint).
+ * @param capability Capability name to resolve.
+ * @param host       Optional host adapter for the GraphQL call.
+ *                   When omitted, the executeGraphQL fallback
+ *                   constructs a Node host inline.
  */
 export async function resolveDefaultModel(
   creds: GraphQLOptions,
   capability: string,
+  host?: AgentHost,
 ): Promise<string | null> {
   if (!creds.apiKey) return null;
 
@@ -117,6 +89,7 @@ export async function resolveDefaultModel(
         LLM_REGISTRY_QUERY,
         {},
         creds,
+        host,
       );
       const map: Record<string, string> = {};
       for (const d of reg.llmRegistry.defaults ?? []) {
@@ -145,8 +118,9 @@ export async function resolveDefaultModel(
  */
 export async function resolveDefaultChatModel(
   creds: GraphQLOptions,
+  host?: AgentHost,
 ): Promise<string> {
-  const m = await resolveDefaultModel(creds, 'chat');
+  const m = await resolveDefaultModel(creds, 'chat', host);
   if (!m) {
     throw new Error(
       'resolveDefaultChatModel: raindb registry has no model with chat capability '

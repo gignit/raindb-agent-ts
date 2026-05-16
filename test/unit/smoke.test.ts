@@ -38,10 +38,18 @@ test('public API exports the GraphQL client', () => {
   assert.equal(typeof agent.RaindbError, 'function');
 });
 
-test('public API exports the openai client + model resolver', () => {
-  assert.equal(typeof agent.makeRaindbAiClient, 'function');
+test('public API exports the model resolver', () => {
+  // Note: makeRaindbAiClient was removed in the goja-host-adapter
+  // refactor. Callers that need a chat completion now call
+  // ctx.host.chatCompletion(req); the Node host (makeNodeHost)
+  // wraps openai-node internally.
   assert.equal(typeof agent.resolveDefaultModel, 'function');
   assert.equal(typeof agent.resolveDefaultChatModel, 'function');
+});
+
+test('public API exports the host adapter', () => {
+  assert.equal(typeof agent.makeNodeHost, 'function');
+  assert.equal(typeof agent.ensureHost, 'function');
 });
 
 test('public API exports the system-prompt builder', () => {
