@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 import { config_get } from '../../src/tools/config.js';
 import type { ToolContext } from '../../src/registry/types.js';
+import { makeNodeHost } from '../../src/host/node.js';
 
 interface FetchCallRecord {
   url: string;
@@ -32,6 +33,7 @@ function ctx(): ToolContext {
       apiKey: 'rdb_test',
       endpoint: 'http://localhost:8080/graphql',
     },
+    host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
     role: 'read',
   };
 }

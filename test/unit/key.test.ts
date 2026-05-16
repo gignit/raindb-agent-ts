@@ -9,6 +9,7 @@ import {
   key_revoke,
 } from '../../src/tools/key.js';
 import type { ToolContext } from '../../src/registry/types.js';
+import { makeNodeHost } from '../../src/host/node.js';
 
 interface FetchCallRecord {
   body: { query: string; variables: Record<string, unknown> };
@@ -34,6 +35,7 @@ function ctx(role: 'read' | 'write' | 'admin' = 'admin'): ToolContext {
       apiKey: 'rdb_test',
       endpoint: 'http://localhost:8080/graphql',
     },
+    host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
     role,
   };
 }

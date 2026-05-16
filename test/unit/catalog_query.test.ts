@@ -13,6 +13,7 @@ import {
 } from '../../src/tools/catalog.js';
 import { sql_execute, vector_search } from '../../src/tools/query.js';
 import type { ToolContext } from '../../src/registry/types.js';
+import { makeNodeHost } from '../../src/host/node.js';
 
 interface FetchCallRecord {
   body: { query: string; variables: Record<string, unknown> };
@@ -38,6 +39,7 @@ function ctx(role: 'read' | 'write' | 'admin' = 'read'): ToolContext {
       apiKey: 'rdb_test',
       endpoint: 'http://localhost:8080/graphql',
     },
+    host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
     role,
   };
 }

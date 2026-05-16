@@ -15,6 +15,7 @@ import {
   _resetDefaultModelCache,
 } from '../../src/client/raindbAi.js';
 import type { RegisteredTool, ToolContext } from '../../src/registry/types.js';
+import { makeNodeHost } from '../../src/host/node.js';
 
 interface MockedCall {
   kind: 'graphql' | 'openai-chat' | 'unknown';
@@ -27,6 +28,7 @@ function ctx(overrides: Partial<ToolContext> = {}): ToolContext {
       apiKey: 'rdb_test',
       endpoint: 'http://localhost:8080/graphql',
     },
+    host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
     role: 'read',
     ...overrides,
   };

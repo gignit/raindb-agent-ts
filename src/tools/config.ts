@@ -72,6 +72,7 @@ export const config_get: RegisteredTool = {
       SERVICE_CONFIG_QUERY,
       { service },
       ctx.creds,
+      ctx.host,
     );
     if (!data.serviceConfig) {
       return { error: `serviceConfig: nil response for ${service}` };

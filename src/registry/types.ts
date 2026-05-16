@@ -10,6 +10,10 @@
 // Two consumers (fdn-app, raindb-app) bind to these. Changing the
 // public exports is a breaking change.
 
+import type { AgentHost } from '../host/types.js';
+
+export type { AgentHost };
+
 /**
  * Per-tenant credentials passed on every GraphQL call. The host
  * (fdn-app, raindb-app, or any future consumer) populates this on
@@ -58,6 +62,21 @@ export interface ToolContext {
    * see the right tenant identity.
    */
   creds: GraphQLOptions;
+  /**
+   * Host adapter providing transport (fetch + chat completion) +
+   * structured logging. Tools call `ctx.host.fetch(...)` instead
+   * of `globalThis.fetch(...)` so non-Node consumers (Lightning
+   * bolt sandboxes) can inject their own transport.
+   *
+   * Node consumers populate via `makeNodeHost(creds)`. The Lightning
+   * bolt host is implemented in Go (raindb-phoenix-lightning's
+   * pkg/lightning runtime) and wraps the goja sandbox's ctx.fetch.
+   *
+   * Required. Constructors that don't set it should call
+   * `ensureHost(ctx)` to auto-fill the Node host (the common case
+   * for existing code paths in fdn-app + raindb-app).
+   */
+  host: AgentHost;
   /**
    * The role the host granted for this turn. Used by the registry
    * filter; tools themselves may also branch on it for permission-

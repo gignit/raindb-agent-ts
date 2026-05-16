@@ -105,6 +105,7 @@ export const formation_list: RegisteredTool = {
       LIST_FORMATIONS_QUERY,
       {},
       ctx.creds,
+      ctx.host,
     );
     return data.listFormations;
   },
@@ -138,6 +139,7 @@ export const formation_describe: RegisteredTool = {
       DESCRIBE_FORMATION_QUERY,
       { formationId: formation },
       ctx.creds,
+      ctx.host,
     );
     if (!data.describeFormation) {
       return { error: `formation not found: ${formation}` };
@@ -191,6 +193,7 @@ export const formation_publish: RegisteredTool = {
         schemaVersion: version,
       },
       ctx.creds,
+      ctx.host,
     );
     return data.publishFormation;
   },

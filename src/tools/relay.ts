@@ -164,6 +164,7 @@ async function readRelay(
   addr: RelayAddress,
   opts: { logIds?: string[]; tree?: boolean },
   creds: { apiKey?: string; endpoint?: string },
+  host: import('../host/types.js').AgentHost | undefined,
 ): Promise<RelayResult | null> {
   const inner: Record<string, unknown> = {
     address: {
@@ -252,7 +253,7 @@ export const relay_queue: RegisteredTool = {
           nextCursor?: string | null;
           hasMore: boolean;
         };
-      }>(LIST_KEYS_QUERY, { input }, ctx.creds);
+      }>(LIST_KEYS_QUERY, { input }, ctx.creds, ctx.host);
       for (const k of data.listKeys.keys ?? []) {
         allEntries.push({ key: k.key, lastModified: k.lastModified });
       }
@@ -294,7 +295,7 @@ export const relay_status: RegisteredTool = {
   async execute(ctx, args) {
     const addrOrErr = relayAddressFromArgs(args);
     if (typeof addrOrErr === 'string') return { error: addrOrErr };
-    const result = await readRelay(addrOrErr, {}, ctx.creds);
+    const result = await readRelay(addrOrErr, {}, ctx.creds, ctx.host);
     if (!result) {
       return { error: `relay not found: ${addrOrErr.relayId}` };
     }
@@ -317,7 +318,7 @@ export const relay_inspect: RegisteredTool = {
   async execute(ctx, args) {
     const addrOrErr = relayAddressFromArgs(args);
     if (typeof addrOrErr === 'string') return { error: addrOrErr };
-    const result = await readRelay(addrOrErr, {}, ctx.creds);
+    const result = await readRelay(addrOrErr, {}, ctx.creds, ctx.host);
     if (!result) {
       return { error: `relay not found: ${addrOrErr.relayId}` };
     }
@@ -354,14 +355,14 @@ export const relay_logs: RegisteredTool = {
   async execute(ctx, args) {
     const addrOrErr = relayAddressFromArgs(args);
     if (typeof addrOrErr === 'string') return { error: addrOrErr };
-    const ids = await readRelay(addrOrErr, {}, ctx.creds);
+    const ids = await readRelay(addrOrErr, {}, ctx.creds, ctx.host);
     if (!ids) {
       return { error: `relay not found: ${addrOrErr.relayId}` };
     }
     if (!ids.logIds || ids.logIds.length === 0) {
       return [] as RelayLogEntry[];
     }
-    const full = await readRelay(addrOrErr, { logIds: ids.logIds }, ctx.creds);
+    const full = await readRelay(addrOrErr, { logIds: ids.logIds }, ctx.creds, ctx.host);
     return full?.logs ?? [];
   },
 };
@@ -381,7 +382,7 @@ export const relay_tree: RegisteredTool = {
   async execute(ctx, args) {
     const addrOrErr = relayAddressFromArgs(args);
     if (typeof addrOrErr === 'string') return { error: addrOrErr };
-    const result = await readRelay(addrOrErr, { tree: true }, ctx.creds);
+    const result = await readRelay(addrOrErr, { tree: true }, ctx.creds, ctx.host);
     if (!result) {
       return { error: `relay not found: ${addrOrErr.relayId}` };
     }
@@ -431,7 +432,7 @@ export const relay_entity: RegisteredTool = {
           nextCursor?: string | null;
           hasMore: boolean;
         };
-      }>(LIST_KEYS_QUERY, { input }, ctx.creds);
+      }>(LIST_KEYS_QUERY, { input }, ctx.creds, ctx.host);
       for (const k of data.listKeys.keys ?? []) {
         // Path layout (verified via paths.RelayBaseRelPath +
         // surrounding code): relays/<formation>/<entityId>/<relayId>/...

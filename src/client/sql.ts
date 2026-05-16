@@ -9,6 +9,7 @@
 // `raindb-cli sql` runs identically through this surface.
 
 import { executeGraphQL } from './graphql.js';
+import type { AgentHost } from '../host/types.js';
 import type { GraphQLOptions } from '../registry/types.js';
 
 export interface SQLResult {
@@ -45,12 +46,16 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * passed, raindb-api scopes the duckdb context to that formation's
  * entity view (mirrors the Go side's QueryEntities path); when
  * empty, it runs against the tenant's full entity dataset.
+ *
+ * The optional `host` parameter routes the GraphQL HTTP call
+ * through an injected transport (see executeGraphQL docstring).
  */
 export async function executeSQL(
   query: string,
   formationId: string,
   creds: GraphQLOptions,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  host?: AgentHost,
 ): Promise<SQLResult> {
   const input: Record<string, unknown> = {
     sql: query,
@@ -61,6 +66,7 @@ export async function executeSQL(
     EXECUTE_SQL_QUERY,
     { input },
     creds,
+    host,
   );
   // raindb-api returns rows as JSON-encoded string arrays per row
   // when the GraphQL surface marshals the SQLResult value list.

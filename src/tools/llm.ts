@@ -78,6 +78,7 @@ interface ReadLatestPayloadResponse {
 async function listFormationEntities(
   formationId: string,
   creds: { apiKey?: string; endpoint?: string },
+  host: import('../host/types.js').AgentHost | undefined,
 ): Promise<Record<string, unknown>[]> {
   const prefix = `indexes/${formationId}/by-id/`;
   const allKeys: string[] = [];
@@ -147,7 +148,7 @@ export const llm_provider_list: RegisteredTool = {
   minRole: 'read',
   parameters: { type: 'object' },
   async execute(ctx) {
-    return listFormationEntities(PROVIDER_FORMATION, ctx.creds);
+    return listFormationEntities(PROVIDER_FORMATION, ctx.creds, ctx.host);
   },
 };
 
@@ -165,7 +166,7 @@ export const llm_model_list: RegisteredTool = {
   minRole: 'read',
   parameters: { type: 'object' },
   async execute(ctx) {
-    return listFormationEntities(MODEL_FORMATION, ctx.creds);
+    return listFormationEntities(MODEL_FORMATION, ctx.creds, ctx.host);
   },
 };
 
@@ -238,7 +239,7 @@ export const llm_usage_report_summary: RegisteredTool = {
     // above references `entity."platform_usage_event"` which is the
     // DuckDB view name (= FormationIDSafe, underscored). Both are
     // correct in their respective layers.
-    const result = await executeSQL(sql, 'platform-usage-event', ctx.creds);
+    const result = await executeSQL(sql, 'platform-usage-event', ctx.creds, undefined, ctx.host);
     const rows: LLMUsageReportRow[] = result.rows.map((row) => ({
       date: row[0] ?? '',
       model: row[1] ?? '',

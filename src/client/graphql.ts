@@ -9,7 +9,16 @@
 // pass GraphQLOptions with at least an apiKey + endpoint; hosts
 // resolve those from their own auth surface (fdn-app from
 // resolveProjectCreds, raindb-app from session-derived creds, etc.).
+//
+// Transport indirection: the optional `host` parameter routes the
+// HTTP call through `host.fetch`. When omitted, the Node default is
+// constructed inline via makeNodeHost(creds). Tools always pass
+// `ctx.host` (normalized by ensureHost upstream). Non-Node consumers
+// (Lightning bolt sandboxes) pass their own AgentHost so the call
+// goes through ctx.fetch instead of globalThis.fetch.
 
+import { makeNodeHost } from '../host/node.js';
+import type { AgentHost } from '../host/types.js';
 import type { GraphQLOptions } from '../registry/types.js';
 
 interface GraphQLError {
@@ -61,9 +70,17 @@ export class RaindbError extends Error {
  * the function does not fall back to env vars (per the package's
  * leaf-layer rule -- see README §Layer rules).
  *
+ * The `host` argument is optional for backward compatibility. When
+ * passed (the normal path from tools that read `ctx.host`), the
+ * HTTP call routes through it. When omitted, a Node host is built
+ * inline from `creds` -- works in Node, throws in goja sandboxes
+ * because openai-node can't load. Always pass host from a
+ * ToolContext when one exists.
+ *
  * @param query     The GraphQL query/mutation string.
  * @param variables Map passed as the operation's `variables` field.
  * @param creds     Tenant credentials resolved by the host.
+ * @param host      Optional host adapter; defaults to Node host.
  * @returns         The `data` field of the response, typed as T.
  * @throws RaindbError on any failure path.
  */
@@ -71,6 +88,7 @@ export async function executeGraphQL<T = Record<string, unknown>>(
   query: string,
   variables: Record<string, unknown>,
   creds: GraphQLOptions,
+  host?: AgentHost,
 ): Promise<T> {
   if (!creds.apiKey) {
     throw new RaindbError('executeGraphQL: creds.apiKey required');
@@ -79,14 +97,14 @@ export async function executeGraphQL<T = Record<string, unknown>>(
     throw new RaindbError('executeGraphQL: creds.endpoint required');
   }
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-API-Key': creds.apiKey,
-  };
+  const transport = host ?? makeNodeHost(creds);
 
-  const response = await fetch(creds.endpoint, {
+  const response = await transport.fetch(creds.endpoint, {
     method: 'POST',
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': creds.apiKey,
+    },
     body: JSON.stringify({ query, variables }),
   });
 

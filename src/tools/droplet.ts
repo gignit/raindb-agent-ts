@@ -263,6 +263,7 @@ export const droplet_read_current: RegisteredTool = {
       READ_CURRENT_QUERY,
       { input: { formationId: formation, scope } },
       ctx.creds,
+      ctx.host,
     );
     if (!data.readCurrent) {
       return { error: `droplet not found: ${formation}/${String(scope)}` };
@@ -299,6 +300,7 @@ export const droplet_read_by_id: RegisteredTool = {
       READ_DROPLET_QUERY,
       { input: { formationId: formation, dropletId: id } },
       ctx.creds,
+      ctx.host,
     );
     if (!data.readDroplet) {
       return { error: `droplet not found: ${id}` };
@@ -341,6 +343,7 @@ export const droplet_read_latest: RegisteredTool = {
         input: { formationId: formation, indexId: index, scopeValue: value },
       },
       ctx.creds,
+      ctx.host,
     );
     if (!data.readLatest) {
       return { error: `droplet not found: ${formation}/${index}/${value}` };
@@ -384,6 +387,7 @@ export const droplet_list: RegisteredTool = {
       LIST_DROPLETS_QUERY,
       { input },
       ctx.creds,
+      ctx.host,
     );
     return data.listDroplets;
   },
@@ -432,6 +436,7 @@ export const droplet_keys: RegisteredTool = {
         LIST_KEYS_QUERY,
         { input },
         ctx.creds,
+      ctx.host,
       );
       const page = data.listKeys;
       allKeys.push(...(page.keys ?? []));
@@ -490,6 +495,7 @@ export const droplet_create: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     return data.writeDroplet;
   },
@@ -556,6 +562,7 @@ export const droplet_update: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     if (!readResp.readLatest) {
       return { error: `droplet not found: ${formation}/${scope}` };
@@ -579,6 +586,7 @@ export const droplet_update: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     return writeResp.writeDroplet;
   },
@@ -614,6 +622,7 @@ export const droplet_push_public: RegisteredTool = {
       PUSH_PUBLIC_MUTATION,
       { input: { formationId: formation, dropletId } },
       ctx.creds,
+      ctx.host,
     );
     return data.pushPublic;
   },
@@ -687,6 +696,7 @@ export const droplet_bulk_create: RegisteredTool = {
             },
           },
           ctx.creds,
+      ctx.host,
         );
         results.push({
           index: i,

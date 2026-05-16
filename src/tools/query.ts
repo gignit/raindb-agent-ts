@@ -102,7 +102,7 @@ export const sql_execute: RegisteredTool = {
     const guardErr = validateSelectOnly(query);
     if (guardErr) return { error: guardErr };
     const formation = stringArg(args, 'formation');
-    return executeSQL(query, formation, ctx.creds);
+    return executeSQL(query, formation, ctx.creds, undefined, ctx.host);
   },
 };
 
@@ -222,6 +222,7 @@ export const vector_search: RegisteredTool = {
       VECTOR_SEARCH_QUERY,
       { input },
       ctx.creds,
+      ctx.host,
     );
     return data.vectorSearch ?? { hits: [] };
   },

@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 
 import { droplet_create } from '../../src/tools/droplet.js';
 import type { ToolContext } from '../../src/registry/types.js';
+import { makeNodeHost } from '../../src/host/node.js';
 
 interface FetchCallRecord {
   url: string;
@@ -43,6 +44,7 @@ function ctx(overrides: Partial<ToolContext> = {}): ToolContext {
       apiKey: 'rdb_test_key',
       endpoint: 'http://localhost:8080/graphql',
     },
+    host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
     role: 'write',
     ...overrides,
   };

@@ -36,6 +36,7 @@
 // (a substantial product feature scoped per-host).
 
 import { RaindbError } from '../client/graphql.js';
+import { ensureHost } from '../registry/ensureHost.js';
 import {
   stringArg,
 } from '../registry/build.js';
@@ -155,6 +156,7 @@ function resolveMarketplaceBaseUrl(ctx: ToolContext): string | { error: string }
  * the agent loop can surface a typed error to the model.
  */
 async function fetchMarketplace<T>(
+  ctx: ToolContext,
   baseUrl: string,
   path: string,
   apiKey: string | undefined,
@@ -164,9 +166,10 @@ async function fetchMarketplace<T>(
   if (apiKey && apiKey.trim() !== '') {
     headers['X-API-Key'] = apiKey;
   }
-  let response: Response;
+  const transport = ensureHost(ctx).host;
+  let response;
   try {
-    response = await fetch(url, { method: 'GET', headers });
+    response = await transport.fetch(url, { method: 'GET', headers });
   } catch (err) {
     throw new RaindbError(
       `marketplace fetch failed (network): ${url}: ${err instanceof Error ? err.message : String(err)}`,
@@ -247,7 +250,7 @@ export const pack_list: RegisteredTool = {
     if (search) qs.set('search', search);
 
     const path = `/api/marketplace/packs${qs.size > 0 ? '?' + qs.toString() : ''}`;
-    const data = await fetchMarketplace<PacksResponse>(base, path, ctx.creds?.apiKey);
+    const data = await fetchMarketplace<PacksResponse>(ctx, base, path, ctx.creds?.apiKey);
     return data.packs ?? [];
   },
 };
@@ -296,7 +299,7 @@ export const pack_info: RegisteredTool = {
 
     let data: PackResponse;
     try {
-      data = await fetchMarketplace<PackResponse>(base, path, ctx.creds?.apiKey);
+      data = await fetchMarketplace<PackResponse>(ctx, base, path, ctx.creds?.apiKey);
     } catch (err) {
       // 404 surfaces as a typed RaindbError with status=404; convert
       // to the friendlier "pack not found" message the prior GraphQL
@@ -389,7 +392,7 @@ export const vendor_list: RegisteredTool = {
   async execute(ctx) {
     const base = resolveMarketplaceBaseUrl(ctx);
     if (typeof base !== 'string') return base;
-    const data = await fetchMarketplace<VendorsResponse>(base, '/api/marketplace/vendors', ctx.creds?.apiKey);
+    const data = await fetchMarketplace<VendorsResponse>(ctx, base, '/api/marketplace/vendors', ctx.creds?.apiKey);
     return data.vendors ?? [];
   },
 };
@@ -425,7 +428,7 @@ export const vendor_info: RegisteredTool = {
     const path = `/api/marketplace/vendors/${encodeURIComponent(vendorId)}`;
     let data: VendorResponse;
     try {
-      data = await fetchMarketplace<VendorResponse>(base, path, ctx.creds?.apiKey);
+      data = await fetchMarketplace<VendorResponse>(ctx, base, path, ctx.creds?.apiKey);
     } catch (err) {
       if (err instanceof RaindbError && err.status === 404) {
         return { error: `vendor not found: ${vendorId}` };
