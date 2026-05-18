@@ -4,7 +4,7 @@ All notable changes to `@raindb/agent` are documented here. The
 package follows semver post-1.0; pre-1.0 minor bumps may include
 breaking changes (rare, called out explicitly).
 
-## Unreleased -- goja-host-adapter (will become 0.6.0)
+## 0.6.0 -- goja-host-adapter
 
 ### Breaking
 
@@ -97,9 +97,15 @@ Lightning bolts (raindb-phoenix-lightning) run in goja sandboxes
 which do not have a Node runtime: no `globalThis.fetch`, no ability
 to load `openai-node`. The pre-v0.6 package required both, so
 bolts couldn't use it. The host abstraction lets bolts inject
-their own transport (goja `ctx.fetch` + a Go-built chat-completion
-adapter) while Node consumers continue using `makeNodeHost` with
-no behavior change.
+their own transport (goja `ctx.fetch` + a chat-completion adapter
+implemented per-consumer; reference TypeScript example in
+`fdn-app/bolt/server/services/agentHost.ts`) while Node consumers
+continue using `makeNodeHost` with no behavior change.
+
+The host implementation lives in the consumer, NOT in this package.
+Each consumer's runtime (Node `globalThis.fetch`, goja `ctx.fetch`,
+or a future runtime's equivalent) is the consumer's concern; this
+package's surface stays runtime-agnostic.
 
 Two known consumers today: `fdn-app` (Node BFF) and the Lightning
 bolt port of fdn-app (goja sandbox). The package's surface accommodates
