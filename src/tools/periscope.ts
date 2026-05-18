@@ -233,6 +233,7 @@ export const periscope_status: RegisteredTool = {
       PERISCOPE_STATUS_QUERY,
       {},
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeStatus;
   },
@@ -250,6 +251,7 @@ export const periscope_formation_list: RegisteredTool = {
       PERISCOPE_FORMATION_LIST_QUERY,
       {},
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeFormationList;
   },
@@ -273,6 +275,7 @@ export const periscope_formation_describe: RegisteredTool = {
       PERISCOPE_FORMATION_DESCRIBE_QUERY,
       { formationId: formation },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeFormationDescribe;
   },
@@ -296,6 +299,7 @@ export const periscope_formation_lint: RegisteredTool = {
       PERISCOPE_FORMATION_LINT_QUERY,
       { formationId: formation },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeFormationLint;
   },
@@ -319,6 +323,7 @@ export const periscope_audit: RegisteredTool = {
       PERISCOPE_AUDIT_QUERY,
       { formationId: formation },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeAudit;
   },
@@ -342,6 +347,7 @@ export const periscope_reconcile: RegisteredTool = {
       PERISCOPE_RECONCILE_QUERY,
       { formationId: formation },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeReconcile;
   },
@@ -365,6 +371,7 @@ export const periscope_tier_list: RegisteredTool = {
       PERISCOPE_TIER_LIST_QUERY,
       { formationId: formation },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeTierList;
   },
@@ -397,6 +404,7 @@ export const periscope_tier_describe: RegisteredTool = {
       PERISCOPE_TIER_DESCRIBE_QUERY,
       { formationId: formation, tier },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeTierDescribe;
   },
@@ -426,6 +434,7 @@ export const periscope_tier_cursor: RegisteredTool = {
       PERISCOPE_TIER_CURSOR_QUERY,
       { formationId: formation, tier },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeTierCursor;
   },
@@ -458,6 +467,7 @@ export const periscope_snapshot_list: RegisteredTool = {
       PERISCOPE_SNAPSHOT_LIST_QUERY,
       vars,
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeSnapshotList;
   },
@@ -487,6 +497,7 @@ export const periscope_snapshot_get: RegisteredTool = {
       PERISCOPE_SNAPSHOT_GET_QUERY,
       { formationId: formation, snapshotId },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeSnapshotGet;
   },
@@ -526,6 +537,7 @@ export const periscope_pool_list: RegisteredTool = {
       PERISCOPE_POOL_LIST_QUERY,
       vars,
       ctx.creds,
+      ctx.host,
     );
     return data.periscopePoolList;
   },
@@ -556,6 +568,7 @@ export const periscope_sentinels_list: RegisteredTool = {
       PERISCOPE_SENTINELS_QUERY,
       vars,
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeSentinels;
   },
@@ -595,6 +608,7 @@ export const periscope_events_list: RegisteredTool = {
       PERISCOPE_EVENTS_QUERY,
       vars,
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeEvents;
   },
@@ -618,6 +632,7 @@ export const periscope_catalog_metadata: RegisteredTool = {
       PERISCOPE_CATALOG_METADATA_QUERY,
       { formationId: formation },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeCatalogMetadata;
   },
@@ -641,6 +656,7 @@ export const periscope_catalog_tree: RegisteredTool = {
       PERISCOPE_CATALOG_TREE_QUERY,
       { formationId: formation },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeCatalogTree;
   },
@@ -670,6 +686,7 @@ export const periscope_droplet_locate: RegisteredTool = {
       PERISCOPE_DROPLET_LOCATE_QUERY,
       { formationId: formation, dropletId },
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeDropletLocate;
   },
@@ -704,6 +721,7 @@ export const periscope_droplet_residual: RegisteredTool = {
       PERISCOPE_DROPLET_RESIDUAL_QUERY,
       vars,
       ctx.creds,
+      ctx.host,
     );
     return data.periscopeDropletResidual;
   },

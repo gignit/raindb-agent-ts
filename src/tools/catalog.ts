@@ -142,6 +142,7 @@ export const catalog_list: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     return data.catalogList;
   },
@@ -186,6 +187,7 @@ export const catalog_tree: RegisteredTool = {
       CATALOG_TREE_QUERY,
       { input },
       ctx.creds,
+      ctx.host,
     );
     if (!data.catalogTree) {
       return { error: `catalog not found: ${catalogScope}` };
@@ -236,6 +238,7 @@ export const catalog_insert: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     return data.catalogInsert;
   },
@@ -287,6 +290,7 @@ export const catalog_update: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     return data.catalogUpdate;
   },
@@ -330,6 +334,7 @@ export const catalog_delete: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     return data.catalogDelete;
   },
@@ -379,6 +384,7 @@ export const catalog_transfer: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     return data.catalogTransfer;
   },

@@ -25,6 +25,7 @@ import assert from 'node:assert/strict';
 
 import { pack_list } from '../../src/tools/marketplace.js';
 import type { ToolContext } from '../../src/registry/types.js';
+import { makeNodeHost } from '../../src/host/node.js';
 
 interface FetchCallRecord {
   url: string;
@@ -51,6 +52,7 @@ function mockFetch(
 function ctx(): ToolContext {
   return {
     creds: { apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' },
+    host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
     role: 'read',
     marketplaceBaseUrl: 'http://localhost:4000',
   };
@@ -174,6 +176,7 @@ test('pack_list: missing marketplaceBaseUrl returns explicit error (no fallback)
   try {
     const noMarketCtx: ToolContext = {
       creds: { apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' },
+      host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
       role: 'read',
       // marketplaceBaseUrl deliberately omitted
     };
@@ -194,6 +197,7 @@ test('pack_list: trailing slash on marketplaceBaseUrl is stripped', async () => 
   try {
     const ctxWithSlash: ToolContext = {
       creds: { apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' },
+      host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
       role: 'read',
       marketplaceBaseUrl: 'http://localhost:4000///',
     };

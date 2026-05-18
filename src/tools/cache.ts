@@ -101,6 +101,7 @@ export const cache_stats_my: RegisteredTool = {
       MY_CACHE_STATS_QUERY,
       {},
       ctx.creds,
+      ctx.host,
     );
     // Go side returns an empty CacheStatsRow when myCacheStats is null
     // (ops/cache.go:170-172). Mirror that so callers get a stable shape.

@@ -16,7 +16,7 @@
  * not exported -- they can iterate freely between releases.
  */
 
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
 
 // === Agent runtime ===
 export { runAgent } from './loop/index.js';
@@ -73,10 +73,35 @@ export {
   type SQLResult,
 } from './client/sql.js';
 export {
-  makeRaindbAiClient,
   resolveDefaultModel,
   resolveDefaultChatModel,
 } from './client/raindbAi.js';
+
+// === Host adapter ===
+//
+// Hosts inject an AgentHost into ToolContext. Two known hosts:
+//   - makeNodeHost(creds) -- Node consumers (fdn-app, raindb-app
+//     server). Wraps globalThis.fetch + openai-node.
+//   - The Lightning bolt host, implemented in Go (lives in
+//     raindb-phoenix-lightning's pkg/lightning runtime), wraps
+//     the goja sandbox's ctx.fetch + ctx.secrets + ctx.log.
+//     Not shipped from this package.
+export type {
+  AgentHost,
+  HostFetchInit,
+  HostResponse,
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+  ChatCompletionChoice,
+  ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+  ChatCompletionResponseMessage,
+  ChatCompletionTool,
+  ChatCompletionToolChoice,
+  ChatContentPart,
+} from './host/index.js';
+export { makeNodeHost } from './host/index.js';
+export { ensureHost } from './registry/ensureHost.js';
 
 // === Per-domain tool catalogs ===
 export {

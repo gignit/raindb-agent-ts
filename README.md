@@ -472,12 +472,124 @@ export {
 
 // === Convenience: full tenant tool table (matches raindb-cli's tenantToolTable) ===
 export { tenantTools } from './tools';
+
+// === Host adapter (v0.6+) ===
+export type {
+  AgentHost,
+  HostFetchInit,
+  HostResponse,
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+  ChatCompletionChoice,
+  ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+  ChatCompletionResponseMessage,
+  ChatCompletionTool,
+  ChatCompletionToolChoice,
+  ChatContentPart,
+} from './host';
+export { makeNodeHost } from './host';
+export { ensureHost } from './registry/ensureHost';
 ```
 
 Hosts compose their own tool array. fdn-app keeps its product
 tools (`fdn_search`, `fdn_get_document`, etc.) in its own repo
 and concatenates `tenantTools` to the end. raindb-app does the
 same with its own product tools.
+
+---
+
+## Host adapter (v0.6+)
+
+The package decouples its dependency on Node primitives by
+funneling every outbound call through an `AgentHost`. Two known
+hosts:
+
+- **Node host** (`makeNodeHost(creds)`) -- wraps `globalThis.fetch`
+  and `openai-node`. The default for fdn-app's BFF + raindb-app's
+  server. Cheap to construct per-request.
+
+- **Lightning bolt host** -- implemented in Go in
+  `~/src/raindb-phoenix-lightning/pkg/lightning`. Wraps the goja
+  sandbox's `ctx.fetch` + `ctx.secrets` + `ctx.log`. NOT shipped
+  from this package; the bolt-side adapter lives in the runtime
+  that owns the sandbox.
+
+The contract is `src/host/types.ts`:
+
+```typescript
+interface AgentHost {
+  fetch(url: string, init?: HostFetchInit): Promise<HostResponse>;
+  chatCompletion(req: ChatCompletionRequest): Promise<ChatCompletionResponse>;
+  log: {
+    info(msg: string, fields?: Record<string, unknown>): void;
+    warn(msg: string, fields?: Record<string, unknown>): void;
+    error(msg: string, fields?: Record<string, unknown>): void;
+  };
+}
+```
+
+### How hosts are wired
+
+`ToolContext.host` is a required field. Node consumers populate
+it via `makeNodeHost(ctx.creds)`. Bolt consumers inject their
+own. The agent loop (`runAgent`) reads `ctx.host.chatCompletion`
+for every LLM round-trip; every tool reads `ctx.host.fetch` (via
+`executeGraphQL` / `fetchMarketplace`) for every HTTP call.
+
+```typescript
+import { runAgent, makeNodeHost, tenantTools } from '@raindb/agent';
+
+const creds = { apiKey: 'rdb_...', endpoint: 'http://localhost:8080/graphql' };
+
+const result = await runAgent({
+  systemPrompt: 'You are a raindb agent.',
+  userPrompt: 'list my formations',
+  ctx: {
+    creds,
+    host: makeNodeHost(creds),
+    role: 'read',
+  },
+  tools: tenantTools,
+});
+```
+
+When a `ToolContext` is constructed without a host (e.g., a host
+upgrading from a pre-v0.6 version where `host` didn't exist),
+internal helpers call `ensureHost(ctx)` which auto-fills
+`makeNodeHost(ctx.creds)`. The TypeScript type enforces presence;
+the runtime helper provides a one-time migration shim.
+
+### Request/response shape
+
+`ChatCompletionRequest` and `ChatCompletionResponse` mirror
+OpenAI's openai-spec wire format (snake_case `tool_calls`,
+`tool_call_id`, `finish_reason`). The types are package-internal
+-- they're NOT a literal alias of `openai-node`'s types -- so
+the package isn't coupled to openai-node version drift, and
+non-OpenAI providers can be wired into a bolt host by translating
+the request body internally.
+
+### Implementing a new host
+
+For a new runtime that isn't Node:
+
+1. Implement `AgentHost` from scratch.
+2. `fetch` returns a `HostResponse` with `.text()` and `.json()`
+   methods. Both are functions (not getters) -- matches the goja-
+   side binding shape.
+3. `chatCompletion` builds the LLM provider's HTTP request body
+   from the `ChatCompletionRequest`, fires it, parses the response
+   into `ChatCompletionResponse`. The Lightning bolt host does
+   this with `ctx.fetch` to `https://api.openai.com/v1/chat/completions`
+   and an `Authorization: Bearer <key>` from `ctx.secrets.get`.
+4. `log.{info,warn,error}` delegate to the runtime's logger.
+
+`test/unit/host_adapter.test.ts` is the structural contract test:
+a hand-rolled mock host drives runAgent through four scenarios
+(plain chat, default-model resolution, tool-call turn, tool error)
+without any global-fetch involvement. Any new host should pass
+the equivalent scenarios.
 
 ---
 

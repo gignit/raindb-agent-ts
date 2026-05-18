@@ -117,13 +117,14 @@ const READ_RELAY_QUERY = `
 async function resolveScopeKey(
   formation: string,
   creds: { apiKey?: string; endpoint?: string },
+  host: import('../host/types.js').AgentHost | undefined,
 ): Promise<string> {
   // Mirrors ops/digest.go::resolveScopeKey -- best-effort describe;
   // fall back to "id" on any failure.
   try {
     const data = await executeGraphQL<{
       describeFormation: { scopeKey?: string } | null;
-    }>(DESCRIBE_FORMATION_QUERY, { formationId: formation }, creds);
+    }>(DESCRIBE_FORMATION_QUERY, { formationId: formation }, creds, host);
     const sk = data.describeFormation?.scopeKey;
     if (sk && sk !== '') return sk;
   } catch {
@@ -145,11 +146,12 @@ function extractEntityID(
 async function listEntityIds(
   formation: string,
   creds: { apiKey?: string; endpoint?: string },
+  host: import('../host/types.js').AgentHost | undefined,
 ): Promise<string[]> {
   // Mirrors ops/digest.go::DigestList lines 93-108: ListDroplets
   // through 200-page-size, project each payload to its scopeKey,
   // dedupe.
-  const scopeKey = await resolveScopeKey(formation, creds);
+  const scopeKey = await resolveScopeKey(formation, creds, host);
   const data = await executeGraphQL<{
     listDroplets: {
       droplets: Array<{ dropletId: string; payload: Record<string, unknown> | null }>;
@@ -176,6 +178,7 @@ async function listRootRelayIds(
   formation: string,
   entityId: string,
   creds: { apiKey?: string; endpoint?: string },
+  host: import('../host/types.js').AgentHost | undefined,
 ): Promise<string[]> {
   // Mirrors ops/relay.go::RelayListForEntity -- list keys under
   // relays/<formation>/<entityId>/, project unique relayIds (the
@@ -193,7 +196,7 @@ async function listRootRelayIds(
         nextCursor?: string | null;
         hasMore: boolean;
       };
-    }>(LIST_KEYS_QUERY, { input }, creds);
+    }>(LIST_KEYS_QUERY, { input }, creds, host);
     for (const k of data.listKeys.keys ?? []) {
       const trimmed = k.key.startsWith(prefix)
         ? k.key.slice(prefix.length)
@@ -216,6 +219,7 @@ async function readRelayTree(
   entityId: string,
   relayId: string,
   creds: { apiKey?: string; endpoint?: string },
+  host: import('../host/types.js').AgentHost | undefined,
 ): Promise<RelayResult | null> {
   const data = await executeGraphQL<{ readRelay: RelayResult | null }>(
     READ_RELAY_QUERY,
@@ -353,8 +357,9 @@ async function synthesizeStatus(
   formation: string,
   entityId: string,
   creds: { apiKey?: string; endpoint?: string },
+  host: import('../host/types.js').AgentHost | undefined,
 ): Promise<DigestEntityStatus> {
-  const rootIds = await listRootRelayIds(formation, entityId, creds);
+  const rootIds = await listRootRelayIds(formation, entityId, creds, host);
   if (rootIds.length === 0) {
     return {
       formationId: formation,
@@ -363,7 +368,7 @@ async function synthesizeStatus(
     };
   }
   const rootId = rootIds[rootIds.length - 1]!;
-  const tree = await readRelayTree(formation, entityId, rootId, creds);
+  const tree = await readRelayTree(formation, entityId, rootId, creds, host);
   if (!tree) {
     return {
       formationId: formation,
@@ -422,7 +427,7 @@ export const digest_list: RegisteredTool = {
   async execute(ctx, args) {
     const formation = stringArg(args, 'formation');
     if (!formation) return { error: 'formation required' };
-    const ids = await listEntityIds(formation, ctx.creds);
+    const ids = await listEntityIds(formation, ctx.creds, ctx.host);
     if (ids.length === 0) return [] as DigestEntityStatus[];
     // Synthesize per id. Concurrency cap mirrors the Go side's
     // default of 8 to keep S3 + raindb-api parallelism reasonable.
@@ -435,7 +440,7 @@ export const digest_list: RegisteredTool = {
         next += 1;
         if (i >= ids.length) return;
         try {
-          results[i] = await synthesizeStatus(formation, ids[i]!, ctx.creds);
+          results[i] = await synthesizeStatus(formation, ids[i]!, ctx.creds, ctx.host);
         } catch (err) {
           results[i] = {
             formationId: formation,
@@ -493,7 +498,7 @@ export const digest_show: RegisteredTool = {
     if (!formation || !entityId) {
       return { error: 'formation and entityId required' };
     }
-    return synthesizeStatus(formation, entityId, ctx.creds);
+    return synthesizeStatus(formation, entityId, ctx.creds, ctx.host);
   },
 };
 

@@ -127,7 +127,7 @@ export const entity_version_history: RegisteredTool = {
           nextCursor?: string | null;
           hasMore: boolean;
         };
-      }>(LIST_KEYS_QUERY, { input }, ctx.creds);
+      }>(LIST_KEYS_QUERY, { input }, ctx.creds, ctx.host);
       const page = data.listKeys;
       for (const k of page.keys ?? []) allKeys.push(k.key);
       if (!page.hasMore || !page.nextCursor) break;
@@ -196,6 +196,7 @@ export const entity_tag: RegisteredTool = {
       TAG_ENTITY_MUTATION,
       { input: { formationId: formation, scopeValue: scope, tags } },
       ctx.creds,
+      ctx.host,
     );
     if (!data.tagEntity.success) {
       return { error: 'tagEntity: server returned success=false' };
@@ -242,6 +243,7 @@ export const entity_untag: RegisteredTool = {
       UNTAG_ENTITY_MUTATION,
       { input: { formationId: formation, scopeValue: scope, tagKeys } },
       ctx.creds,
+      ctx.host,
     );
     if (!data.untagEntity.success) {
       return { error: 'untagEntity: server returned success=false' };
@@ -296,6 +298,7 @@ export const entity_mark_for_expiration: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     if (!data.tagEntity.success) {
       return { error: 'tagEntity: server returned success=false' };
@@ -342,6 +345,7 @@ export const entity_cancel_expiration: RegisteredTool = {
         },
       },
       ctx.creds,
+      ctx.host,
     );
     if (!data.untagEntity.success) {
       return { error: 'untagEntity: server returned success=false' };
@@ -386,6 +390,7 @@ export const entity_expire: RegisteredTool = {
       EXPIRE_DROPLET_MUTATION,
       { input: { formationId: formation, scopeValue: scope } },
       ctx.creds,
+      ctx.host,
     );
     if (!data.expireDroplet.success) {
       return { error: 'expireDroplet: server returned success=false' };

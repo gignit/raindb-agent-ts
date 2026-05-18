@@ -118,6 +118,7 @@ export const key_list: RegisteredTool = {
       LIST_API_KEYS_QUERY,
       vars,
       ctx.creds,
+      ctx.host,
     );
     return data.listAPIKeys;
   },
@@ -168,6 +169,7 @@ export const key_create: RegisteredTool = {
       CREATE_API_KEY_MUTATION,
       { input },
       ctx.creds,
+      ctx.host,
     );
     return data.createAPIKey;
   },
@@ -201,6 +203,7 @@ export const key_revoke: RegisteredTool = {
       REVOKE_API_KEY_MUTATION,
       { apiClientId },
       ctx.creds,
+      ctx.host,
     );
     return data.revokeAPIKey;
   },
