@@ -15,11 +15,13 @@
 
 import { cacheTools } from './cache.js';
 import { catalogTools } from './catalog.js';
+import { chainTools } from './chain.js';
 import { configTools } from './config.js';
 import { digestTools } from './digest.js';
 import { dropletTools } from './droplet.js';
 import { entityTools } from './entity.js';
 import { formationTools } from './formation.js';
+import { indexPageTools } from './index_page.js';
 import { keyTools } from './key.js';
 import { llmTools } from './llm.js';
 import { marketplaceTools } from './marketplace.js';
@@ -181,6 +183,23 @@ export {
   periscope_droplet_residual,
   periscopeTools,
 } from './periscope.js';
+export {
+  chain_status,
+  chain_cardinality,
+  chain_audit,
+  chainTools,
+  type ChainCardinality,
+  type ChainSetsInitiator,
+  type ChainSet,
+  type ChainAuditSetEntry,
+  type ChainStatus,
+  type ChainAudit,
+} from './chain.js';
+export {
+  index_page,
+  indexPageTools,
+  type IndexPageResult,
+} from './index_page.js';
 
 /**
  * The full tenant tool table. Mirrors the Go aggregator's order so
@@ -189,7 +208,13 @@ export {
  * Domain order (from raindb-phoenix-oc/internal/ai/tools.go::
  * tenantToolTable):
  *   droplet, catalog, entity, sql, formation, cache, periscope,
- *   key, config, usage, relay, digest, llm, marketplace.
+ *   key, config, usage, relay, digest, llm, marketplace, chain,
+ *   index_page.
+ *
+ * chain + index_page are TS-side additions that mirror the
+ * raindb-phoenix-lightning chain inspection + read surface
+ * (added alongside the orderByDesc:true machinery -- see
+ * docs/RAINDB_PATTERNS.md "Newest-First Lists + Polling Updates").
  */
 export const tenantTools: RegisteredTool[] = [
   ...dropletTools,
@@ -206,4 +231,6 @@ export const tenantTools: RegisteredTool[] = [
   ...digestTools,
   ...llmTools,
   ...marketplaceTools,
+  ...chainTools,
+  ...indexPageTools,
 ];
