@@ -189,8 +189,11 @@ raindb-cli --profile core.<env>.my-app lightning bolt publish \
 ```
 
 Output includes:
-- `BoltID` -- save this; reuse it for republishes to keep the URL stable
-- `Public URL` -- the autogen `stormfront-<hex>.<env>.raindb.gignit.com`
+- `BoltID` -- stable across republishes; reuse via `--name`
+- `BoltStatsID` -- scope value for the bolt's stats droplet; carried forward
+- `Revision` -- the immutable revision droplet ID for this publish
+- `Mode` -- `fresh publish` (new bolt) or `republish (server-side merge with prior droplet)`
+- `AutogenURL` -- the autogen `stormfront-<hex>.<env>.raindb.gignit.com`
 
 Wait ~10-30 seconds for genesis to provision the ALB listener rule,
 then:
@@ -199,6 +202,17 @@ then:
 curl https://stormfront-<your-hex>.<env>.raindb.gignit.com/api/health
 # -> {"status":"ok","service":"my-app"}
 ```
+
+**Single round trip + server-side merge.** As of FD-65 (see
+`raindb-phoenix-lightning/docs/RAINDB_PHX_LIGHTNING.md`), publish
+is a single `publishBolt` GraphQL mutation. The CLI sends the
+bolt manifest as one opaque JSON payload; the server resolves
+identity (name -> boltId via the `by-name-latest` pointer index),
+merges with the prior bolt droplet (so fields the operator
+didn't change are carried forward), ensures the
+lightning-bolt-stats token droplet exists, and writes one new
+immutable revision. You don't need to track the BoltID manually
+-- republishing by name reuses everything.
 
 ### 5. Iterate
 
@@ -209,9 +223,15 @@ raindb-cli --profile core.<env>.my-app lightning bolt publish \
   --source ./bolt --name my-app --auto-routes \
   --capabilities ./bolt/capabilities.json \
   --deployment ./bolt/deployment.json
-# Reuses BoltID by name match -- same URL, new revision.
+# Mode: republish (server-side merge with prior droplet)
+# Reuses BoltID + BoltStatsID by name match -- same URL, new revision.
 # ~5-15 seconds per cycle.
 ```
+
+The server-side merge means you can omit flags you don't need to
+change. If you're only iterating on the bundle (e.g. fixing a
+handler), the routes/capabilities/deployment/domain all carry
+forward from the prior droplet automatically.
 
 Wrap that in a 10-line `fswatch` watcher script if you want
 auto-publish on file change. Example:
@@ -242,11 +262,50 @@ raindb-cli --profile core.<env>.my-app lightning bolt publish \
   ...
 ```
 
-This sets `customDomains: [...]` on the manifest and tells genesis
-to add a matching ALB host-header rule. You still need to add a
-Route53 record (A-alias or CNAME) pointing the hostname at the
-bolt-ALB. The publish output includes a `dnsInstructions` block
-with the exact AWS CLI commands.
+This sets the manifest's `domain` field and tells genesis to add
+a matching ALB host-header rule. You still need to add a Route53
+record (A-alias or CNAME) pointing the hostname at the bolt-ALB
+unless the domain falls inside a controlled zone (the apex swap
+happens automatically for `<env>.raindb.gignit.com`-style names).
+The publish output includes a `dnsInstructions` block with the
+exact AWS CLI commands when manual DNS is needed.
+
+**First-claim flow.** The FIRST time any tenant publishes a bolt
+with a brand-new `--domain`, the publish output includes a
+one-time `NewDomainKey` value:
+
+```
+NewDomainKey: hL+fIImo2U8HtMny4pBUwGuyx50EtaDagnwM7wQkXao=
+              ^-- ONE-TIME disclosure. Save this if you may need to
+                  transfer the domain to another tenant later.
+```
+
+This is the domain-ownership key. It's stored encrypted-at-rest
+on both your tenant AND the platform tenant; you don't NEED to
+save it (republishes auto-resolve from your tenant's
+lightning-secrets formation). Save it only if you plan to transfer
+the domain to another tenant later. See section "Custom domain
+ownership" below for the full model.
+
+**Cross-tenant hijack defense.** A different tenant attempting
+to publish a bolt with the same `--domain` is rejected by the
+resolver with:
+
+```
+error: publishBolt: domain "<x>" is already claimed by a
+different bolt; supply the matching domainKey for legitimate
+transfer
+```
+
+The defense lives in the `publishBolt` mutation's pre-write
+gate -- the rejection happens BEFORE any droplet is written, so
+the routing for the legitimate bolt is never disturbed.
+
+**Same-tenant multi-bolt-per-domain works automatically.** If
+you want multiple bolts in the same tenant to share a domain
+(for future explicit-route composition), publish each one with
+the same `--domain`; the resolver's auto-inject path supplies
+the key from your tenant's lightning-secrets each time.
 
 ---
 
@@ -340,6 +399,48 @@ return { status: res.status, body: JSON.parse(res.body) };
 This is the pattern raindb-app's marketplace routes use. ~80
 lines of proxy code instead of ~230 lines of duplicated SQL.
 
+### Custom domain ownership
+
+When a Bolt is published with `--domain <hostname>`, the
+`publishBolt` mutation enforces ownership via a per-domain
+secret in the existing `lightning-secrets` formation.
+
+**Read your tenant's domain key.** Auto-decrypts on read:
+
+```bash
+raindb-cli --profile <your-profile> droplet read-latest \
+  lightning-secrets by-name-latest 'domainKey:<domain>'
+```
+
+The `value` field is the plaintext key.
+
+**Cross-tenant transfer.** When tenant A wants to hand a custom
+domain to tenant B:
+
+1. Tenant A reads their `domainKey:<domain>` value (above).
+2. A hands the plaintext to B out-of-band.
+3. B publishes with the manifest's `payload.domainKey` field
+   set to the supplied plaintext (e.g. by editing the bolt's
+   source or via a custom publish wrapper). The resolver
+   pre-write gate verifies B's supplied key matches the
+   platform-side claim and accepts the transfer; routing for
+   the domain follows B's new bolt droplet.
+4. The resolver also writes the key to B's lightning-secrets
+   so B's subsequent republishes auto-resolve.
+5. Optional: A deletes their stale lightning-secrets entry
+   once transfer is confirmed.
+
+**Same-tenant multi-bolt-per-domain.** Architectural-level
+supported today; routing composition between multiple bolts at
+the same domain (e.g. one bolt handles `/auth/*`, another
+handles `/api/*`) requires future routing-layer work that
+isn't yet shipped. The ownership claim model doesn't block it.
+
+For the full architecture see
+`raindb-phoenix-lightning/docs/RAINDB_CUSTOM_DOMAIN.md` section
+"Domain ownership claims (FD-65 -- shipped)" and FD-65 in
+`raindb-phoenix-lightning/docs/RAINDB_PHX_LIGHTNING.md`.
+
 ---
 
 ## DO / DO NOT
@@ -419,13 +520,6 @@ platform tenant. Bolts run on tenants WITH a bridge auto-provisioned
 on `tenant create`. The platform tenant itself doesn't have a
 bridge to itself; publish to a different tenant.
 
-### Stats emission warnings (`drop-tolerant`)
-
-The first publish of a Bolt may log
-`StatsBatch failed (drop-tolerant) ... lightning-bolt-stats ... not found`.
-These are non-fatal -- the stats token droplet gets created on
-first invocation. Safe to ignore.
-
 ### Bolt returns null values for every field
 
 Almost always: your SQL returned the right column SHAPE but the
@@ -442,6 +536,35 @@ your Route53 record isn't pointing at the bolt-ALB yet. Check:
 2. `dig <hostname>` -- it should resolve to the bolt-ALB's IPs
 3. The `dnsInstructions` block in your publish output -- it has
    the exact Route53 change-batch JSON
+
+### Publish fails with `domain "<x>" is already claimed by a different bolt`
+
+The domain you're trying to claim is already owned by another
+tenant. Two cases:
+
+- **Domain is owned by you in a DIFFERENT tenant.** You need to
+  transfer ownership: read the `domainKey:<domain>` value from
+  the owning tenant's lightning-secrets (auto-decrypts on read),
+  then publish from the target tenant with the manifest's
+  `payload.domainKey` set to that plaintext. The resolver
+  pre-write gate verifies and accepts the transfer.
+
+- **Domain is owned by someone else.** The publish is correctly
+  rejected. You can either pick a different domain or contact
+  the owning tenant for a legitimate transfer.
+
+The error fires at the resolver's pre-write gate, so no droplet
+is written and the legitimate bolt's routing is undisturbed.
+
+### Stats emission warnings (`drop-tolerant`) -- not seen anymore
+
+The first publish of a Bolt no longer logs
+`lightning-bolt-stats ... not found` warnings. As of FD-65, the
+publishBolt mutation ensures the lightning-bolt-stats token
+droplet exists server-side BEFORE the bolt droplet is written;
+the dispatcher's first invocation lands on a populated token.
+If you see these warnings, you're likely on a pre-FD-65 build
+of the platform.
 
 ---
 
