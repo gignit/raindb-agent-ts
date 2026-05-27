@@ -38,6 +38,188 @@ response surface lives in the Bolt.
 
 ---
 
+## Build anything: zero to running app
+
+Build once, scale infinite, never migrate or refactor. Pick what
+you want to make -- tic-tac-toe, a TODO app, the next Twitter
+rival, a RAG chatbot over your company docs, an image-generation
+SaaS, a multiplayer card game, a forum, anything -- and follow
+the path below.
+
+### For humans (the 3-step front door)
+
+1. **Decide what you want to make.** Anything. RainDB doesn't
+   care.
+2. **Create an account, group, and tenant** at
+   `https://devx.raindb.gignit.com`. Register, then from the
+   home page: create a Group, then a Tenant inside that Group.
+   The dashboard's "Tenant created" modal will display an
+   `rgr1.*` admin key -- copy it.
+3. **Hand your AI agent this README and your API key.** Tell it
+   what you want to build. The agent does the rest.
+
+That's it for your part. The agent runs the rest of the loop:
+publishes a Bolt, iterates as you give feedback, points your
+custom domain when you're ready. **You never have to migrate
+schema, refactor for scale, or spin up servers.** Build once;
+scale infinite.
+
+### Group + tenant model (read this before you create them)
+
+A **group** owns one or more **tenants**. There's no limit on
+the number of tenants per group. Every member of a group has
+access to every tenant in it.
+
+Each tenant is fully isolated -- no implicit data sharing.
+**Use tenant boundaries to separate environments OR audiences,
+NOT to separate features.** Two common patterns:
+
+- **Dev / test / prod as tenants.** Same formation shapes
+  everywhere; data isolated by tenant. No `_dev` / `_prod`
+  suffixes on formation names. Promote between tenants by
+  republishing the Bolt against the next tenant's API key.
+- **One group = one team's environment.** Developers in a
+  "dev" group access dev+test tenants. Operations team in a
+  "prod" group accesses the prod tenant.
+
+**Starting fresh: one group, one tenant.** Add more later if
+you actually need them. Splitting too early creates friction
+that doesn't pay back.
+
+The unit of work in RainDB is the **formation** + the
+**droplets** inside it. Formations are the schemas; droplets
+are the immutable records. Bridges between tenants are an
+explicit opt-in if you ever need to share data; most apps
+never bridge.
+
+### For AI agents (the autonomous build loop)
+
+Treat the human's description ("build a tic-tac-toe game",
+"build a chat app like Discord") as your specification and
+execute:
+
+1. **Read the Marketplace first.** ALWAYS. Browse
+   `https://api.devx.raindb.gignit.com/api/marketplace/packs`
+   (or the dashboard's Marketplace tab) before writing any code.
+   If a pack solves your problem (auth, document store, AI
+   chat, conversations, image gen, RAG), USE IT. Reinventing a
+   marketplace pack is the most common AI mistake.
+
+   Start by reading these patterns:
+   - `tenant-base` -- standard tenant formations every app needs
+   - `auth-email` -- email+password identity with sessions
+   - `lightning` -- the runtime + bolt patterns
+   - Any pack matching your app's domain (chat, documents,
+     marketplace, ai-content, etc.)
+
+2. **Set up your CLI profile.** Configure `~/.config/raindb-cli`
+   with the user's tenant API key (the `rgr1.*` they pasted):
+
+   ```bash
+   raindb-cli profile add core.devx.<app-name> \
+     --endpoint https://api.devx.raindb.gignit.com/graphql \
+     --tenant <tenant-id> \
+     --api-key <rgr1...>
+   ```
+
+   Now every `raindb-cli` command runs as the user's tenant.
+
+3. **Build the Bolt first.** Don't run a local server. The
+   Bolt IS your server.
+
+   - Use the **sectioned `routes.json`** shape (see "Routes --
+     two shapes accepted" below). For an SPA, six lines is
+     enough -- the CLI synthesizes the dynamic catch-all
+     automatically.
+   - Implement `onHttpRequest(ctx, req)` in `server/index.ts`.
+     Dispatch to handlers based on `req.path`.
+   - Stage any secrets the Bolt needs (3rd-party API keys,
+     JWT secret, etc.) via
+     `raindb-cli droplet create --formation lightning-secrets`.
+
+4. **Publish early. Get a URL. Iterate.**
+
+   ```bash
+   raindb-cli --profile core.devx.<app-name> lightning bolt deploy \
+     --source ./bolt --name <app-name> --auto-routes \
+     --capabilities ./bolt/capabilities.json \
+     --deployment ./bolt/deployment.json
+   ```
+
+   The output gives you `https://stormfront-<hex>.devx.raindb.gignit.com`.
+   That URL is LIVE within ~10-30 seconds (genesis provisions the
+   ALB rule). Point your client (vite, plain HTML, whatever) at
+   it and start iterating.
+
+   **Server changes:** edit code -> republish -> available within
+   seconds. The Bolt is a single deploy unit; no Docker, no
+   instance scaling, no health checks.
+
+   **Client changes:** `vite dev` against the Bolt URL via CORS
+   or vite's proxy. Republish only when you want the latest
+   client bundled into the Bolt's served `/dist`.
+
+5. **Build formations for whatever your app does.** Every
+   data shape is a formation. Pick the right primitive:
+
+   - **Entity formations** -- mutable-by-immutable-revision
+     records (users, posts, products, conversations). Use
+     `writeDroplet` / `readLatest`.
+   - **Token formations** -- counter / set / state primitives
+     (rate limits, presence, view counts). Use
+     `writeToken` / `readToken`.
+   - **Periscope tiers** -- automatic SQL views over your
+     formations (`executeSQL` works without extra setup
+     when tiers are configured).
+   - **Auto-floats** -- formation field gets uploaded to S3
+     (private + public buckets) on every write. Public-asset
+     pipelines for images, files, bundles. No CDN setup.
+   - **Bridges** -- one tenant reads another's formation
+     transparently. Cross-tenant data sharing without
+     manual replication. Most apps don't need this.
+   - **Genesis blueprints** -- declarative AWS resource
+     management (only matters if your Bolt provisions
+     downstream cloud resources).
+
+   The marketplace has working examples of all of these. Copy
+   the formation config, adapt to your shape, publish, done.
+
+6. **When the app is ready: point your custom domain.** Run:
+
+   ```bash
+   raindb-cli --profile core.devx.<app-name> lightning bolt deploy \
+     --source ./bolt --name <app-name> --auto-routes --domain <your-domain> \
+     ... # same flags as before
+   ```
+
+   First publish with a brand-new domain mints a `domainKey`
+   plaintext (returned ONCE in `NewDomainKey`; also stored
+   encrypted-at-rest in your tenant + the platform's
+   `lightning-secrets`). Subsequent republishes auto-resolve;
+   no operator action needed. Hijack attempts from other
+   tenants are rejected at the resolver pre-write gate.
+   See "Custom domain" + "Custom domain ownership" below.
+
+**You never have to:**
+- Spin up a server.
+- Pick an instance size.
+- Configure auto-scaling.
+- Set up a load balancer.
+- Configure HTTPS / certs.
+- Set up a database.
+- Run schema migrations.
+- Refactor for scale.
+- Set up a CDN for static assets.
+- Set up Redis / queues / pubsub.
+- Set up a CI/CD pipeline (republish IS the pipeline).
+- Set up cron / scheduled jobs (use cyclone scheduled actions).
+
+The CLI + the platform handle every one of those concerns. The
+agent's job is to translate human intent into a Bolt + a
+collection of formations. The platform's job is everything else.
+
+---
+
 ## First read: the Marketplace
 
 **Before you write code, browse the Marketplace.** The Marketplace
@@ -63,10 +245,12 @@ curl -H "X-API-Key: $RAINDB_API_KEY" \
 
 ---
 
-## Quickstart: from zero to live Bolt in ~5 minutes
+## Quickstart: detailed mechanics
 
-This walks through the minimum path: tenant + secrets + Bolt source +
-publish. Adapt for your own app name/domain.
+This is the step-by-step reference behind "Build anything" above.
+Read this when the high-level loop needs to drill into a specific
+mechanic (tenant creation, secret staging, scaffold layout, publish
+verbs, custom-domain DNS).
 
 ### 1. Get a tenant + API key
 
