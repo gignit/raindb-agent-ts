@@ -104,7 +104,7 @@ my-app/
   bolt/
     capabilities.json           # which formations + secrets you need
     deployment.json             # mount config + ALB hints
-    routes.json                 # dispatch table (or use --auto-routes)
+    routes.json                 # dispatch table (sectioned shape preferred; or --auto-routes)
     package.json                # one dep: @raindb/agent (if you use it)
     bin/build-bolt.sh           # vite build + raindb-cli publish
     server/
@@ -362,9 +362,82 @@ const hash = ctx.crypto.hashPassword(plaintext, 12);
 const ok = ctx.crypto.verifyPassword(plaintext, hash);
 ```
 
-### Serve static assets (SPA)
+### Routes -- two shapes accepted
 
-In `bolt/routes.json`:
+The CLI accepts `bolt/routes.json` in either form. **Sectioned is
+preferred for new bolts** -- it deduplicates declarations across
+HTTP methods and supports `block` + `redirect` first-class. Flat
+array is the legacy form, still fully supported.
+
+#### Sectioned form (preferred)
+
+Group entries by purpose. The CLI assembles them into the final
+ordered route table in the right resolution order automatically:
+block first, then redirect, then static-specific, then dynamic
+routes, then static-fallback (the `/*` catch-all).
+
+```json
+{
+  "block": [
+    { "path": "/.env",       "status": 404 },
+    { "path": "/.git/*",     "status": 404 }
+  ],
+  "redirect": [
+    { "path": "/old/(.+)",   "status": 301, "to": "/new/$1" }
+  ],
+  "static": [
+    { "path": "/assets/*",   "publicAsset": "assets/" },
+    { "path": "/*",          "publicAsset": "index.html" }
+  ],
+  "routes": [
+    { "method": "POST",      "path": "/webhooks/*", "handler": "onHttpRequest" }
+  ]
+}
+```
+
+Field reference:
+
+| Section | Fields | Notes |
+|---|---|---|
+| `block` | `path` (required), `status` (required), `method` (optional) | Reject matching requests with the given status. Use for `/.env`, `/.git/*`, scanner traps. |
+| `redirect` | `path` (required), `to` (required), `status` (optional, default 302), `method` (optional) | 301 / 302 / 307 / 308 supported. Capture groups in `path` are interpolated into `to`. |
+| `static` | `path` (required), `publicAsset` (required) | `publicAsset` is the path AT THE ROOT OF THE ZIP that lightningbuild produces. The float pipeline adds the public-bucket `files/` prefix; don't include it here. |
+| `routes` | `path` (required), `handler` (required), `method` (optional) | Dynamic handler dispatch. Method omitted = matches any. |
+
+**Automatic catch-all synthesis.** If you declare ONLY static
+entries (the typical SPA case -- like raindb-app's `bolt/routes.json`),
+the CLI synthesizes a `{path: "/*", handler: "onHttpRequest"}` route
+BEFORE the static `/*` fallback. So:
+
+```json
+{
+  "static": [
+    { "path": "/assets/*", "publicAsset": "assets/" },
+    { "path": "/*",        "publicAsset": "index.html" }
+  ]
+}
+```
+
+becomes equivalent to:
+
+```
+1. /assets/* static -> assets/
+2. /* dynamic -> onHttpRequest        (auto-synthesized)
+3. /* static -> index.html            (SPA fallback)
+```
+
+Dynamic handler tries first; on 404 the static `/*` serves
+`index.html` so client-side routing works on hard refresh.
+
+Add a `routes` section to control the dynamic-route shape
+explicitly (e.g. only `/api/*` + `/auth/*`) -- the auto-catch-all
+is suppressed when ANY `routes` entry is present.
+
+#### Flat array (legacy)
+
+Same final shape, declared as one ordered list. Useful if you
+want to inline a redirect between specific dynamic routes, or
+you're porting an existing config:
 
 ```json
 [
@@ -377,8 +450,28 @@ In `bolt/routes.json`:
 ]
 ```
 
+Note the static entries wrap their fields inside a `static`
+object (`{"static": {"path": ..., "publicAsset": ...}}`) in the
+flat form. The sectioned form lets you list them at the top
+level under the `static` key.
+
+#### SPA setup checklist
+
 Stage `bolt/client/dist/` (from `vite build`) before publishing.
-The publisher bundles it into the Bolt's asset tree.
+The publisher bundles it into the Bolt's asset tree. The
+sectioned-routes pattern raindb-app uses is the canonical SPA
+template:
+
+```json
+{
+  "static": [
+    { "path": "/assets/*", "publicAsset": "assets/"   },
+    { "path": "/*",        "publicAsset": "index.html" }
+  ]
+}
+```
+
+Six lines. The CLI does the rest.
 
 ### Call raindb-api's REST surfaces
 
@@ -479,13 +572,18 @@ For the full architecture see
   platform tenant.** The view may not be registered locally; you'll
   get either "table does not exist" or null projections. Use
   `readLatest` or proxy raindb-api's canonical handler.
-- **Don't put the `static` route's path outside the static object.**
-  It's `{"static": {"path": "/*", "publicAsset": "index.html"}}`,
+- **Don't put the `static` route's path outside the static object
+  (flat-form only).** In the flat array form it's
+  `{"static": {"path": "/*", "publicAsset": "index.html"}}`,
   NOT `{"path": "/*", "static": {"publicAsset": "..."}}`. The wrong
-  shape gets silently ignored by the dispatcher.
+  shape gets silently ignored by the dispatcher. The **sectioned
+  form** doesn't have this gotcha -- entries under the `static`
+  key are listed at top level. Prefer sectioned for new bolts.
 - **Don't use `--auto-routes` if your app has non-`/api/*` paths**
   (like `/auth/*`). Auto-routes only registers `/api/*` + statics.
-  Write explicit `routes.json` for everything else.
+  Write explicit `routes.json` for everything else. The sectioned
+  form makes this cheap -- list your routes under `"routes": [...]`
+  and your statics under `"static": [...]`.
 - **Don't assume `executeSQL` rows are array-of-arrays.** Phoenix
   returns array-of-objects in some paths. Normalize via the helper
   function in your `raindb.ts` (sniff `Array.isArray(rows[0])`).
@@ -500,8 +598,14 @@ For the full architecture see
 
 ### `route_not_found` for static asset paths
 
-The dispatcher requires `{"static": {"path": ..., "publicAsset": ...}}`.
-Path goes INSIDE the static object. See "DO NOT" above.
+If your `routes.json` is the **flat array form**, the dispatcher
+requires `{"static": {"path": ..., "publicAsset": ...}}` -- path
+goes INSIDE the static object. The wrong shape (path at top level
++ static carrying only publicAsset) gets silently ignored.
+
+Easier fix: switch to the **sectioned form** which lists static
+entries at the top level under the `static` key. No nesting
+confusion possible. See "Routes -- two shapes accepted" above.
 
 ### `Table with name <foo> does not exist`
 
