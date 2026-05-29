@@ -1,884 +1,151 @@
-# Building on RainDB
+# RainDB
 
-**The public guide for humans and AI agents building applications
-on RainDB.** Short, copy-pasteable, no assumed knowledge.
+> The S3 Engine for SaaS. Build a multi-tenant app, real-time AI included, in an afternoon.
 
----
+RainDB collapses the SaaS stack into one substrate (S3) and one runtime (Lightning).
+You write a small TypeScript bundle, declare what it touches, and ship.
+Every byte you write is also the datalake. Every tenant gets RAG for free.
 
-## What RainDB is
-
-RainDB is the platform that does what a traditional server normally
-takes care of: storage, identity, sessions, indexes, queries, cross-
-tenant bridges, cache, cascade pipelines, and compute (Lightning
-Bolts). You don't build "a backend backed by RainDB" -- you build a
-**client** plus a **thin compute layer (a Bolt)** that translates
-HTTP requests into RainDB operations. The Bolt is the smallest thing
-that turns `GET /api/things` into `readLatest("things", ...)` and
-returns the result as JSON.
-
-The Bolt runs inside RainDB's Lightning runtime (a goja JavaScript
-sandbox running on the platform's ALB-fronted dispatcher). Once
-deployed, your Bolt:
-
-- **Has a public URL** at `https://stormfront-<hex>.<env>.raindb.gignit.com`
-  (and optionally a custom domain you specify at publish time).
-- **Has secrets** declared in `capabilities.json` and pre-staged
-  in the `lightning-secrets` formation -- accessible at runtime via
-  `ctx.secrets.get("name")`.
-- **Has formation access** declared in `capabilities.json` -- read
-  and write to specific RainDB formations.
-- **Has signed-grant access** to raindb-api via the cross-admin grant
-  the Bolt's tenant carries.
-
-A traditional Node/Express server is OPTIONAL. Most apps will not
-need one. Apps that DO need long-running background work (queue
-consumers, schedulers) can run a separate process and write to
-RainDB formations the Bolt reads from -- but the HTTP request/
-response surface lives in the Bolt.
-
----
-
-## Build anything: zero to running app
-
-Build once, scale infinite, never migrate or refactor. Pick what
-you want to make -- tic-tac-toe, a TODO app, the next Twitter
-rival, a RAG chatbot over your company docs, an image-generation
-SaaS, a multiplayer card game, a forum, anything -- and follow
-the path below.
-
-### For humans (the 3-step front door)
-
-1. **Decide what you want to make.** Anything. RainDB doesn't
-   care.
-2. **Create an account, group, and tenant** at
-   `https://devx.raindb.gignit.com`. Register, then from the
-   home page: create a Group, then a Tenant inside that Group.
-   The dashboard's "Tenant created" modal will display an
-   `rgr1.*` admin key -- copy it.
-3. **Hand your AI agent this README and your API key.** Tell it
-   what you want to build. The agent does the rest.
-
-That's it for your part. The agent runs the rest of the loop:
-publishes a Bolt, iterates as you give feedback, points your
-custom domain when you're ready. **You never have to migrate
-schema, refactor for scale, or spin up servers.** Build once;
-scale infinite.
-
-### Group + tenant model (read this before you create them)
-
-A **group** owns one or more **tenants**. There's no limit on
-the number of tenants per group. Every member of a group has
-access to every tenant in it.
-
-Each tenant is fully isolated -- no implicit data sharing.
-**Use tenant boundaries to separate environments OR audiences,
-NOT to separate features.** Two common patterns:
-
-- **Dev / test / prod as tenants.** Same formation shapes
-  everywhere; data isolated by tenant. No `_dev` / `_prod`
-  suffixes on formation names. Promote between tenants by
-  republishing the Bolt against the next tenant's API key.
-- **One group = one team's environment.** Developers in a
-  "dev" group access dev+test tenants. Operations team in a
-  "prod" group accesses the prod tenant.
-
-**Starting fresh: one group, one tenant.** Add more later if
-you actually need them. Splitting too early creates friction
-that doesn't pay back.
-
-The unit of work in RainDB is the **formation** + the
-**droplets** inside it. Formations are the schemas; droplets
-are the immutable records. Bridges between tenants are an
-explicit opt-in if you ever need to share data; most apps
-never bridge.
-
-### For AI agents (the autonomous build loop)
-
-Treat the human's description ("build a tic-tac-toe game",
-"build a chat app like Discord") as your specification and
-execute:
-
-1. **Read the Marketplace first.** ALWAYS. Browse
-   `https://api.devx.raindb.gignit.com/api/marketplace/packs`
-   (or the dashboard's Marketplace tab) before writing any code.
-   If a pack solves your problem (auth, document store, AI
-   chat, conversations, image gen, RAG), USE IT. Reinventing a
-   marketplace pack is the most common AI mistake.
-
-   Start by reading these patterns:
-   - `tenant-base` -- standard tenant formations every app needs
-   - `auth-email` -- email+password identity with sessions
-   - `lightning` -- the runtime + bolt patterns
-   - Any pack matching your app's domain (chat, documents,
-     marketplace, ai-content, etc.)
-
-2. **Set up your CLI profile.** Configure `~/.config/raindb-cli`
-   with the user's tenant API key (the `rgr1.*` they pasted):
-
-   ```bash
-   raindb-cli profile add core.devx.<app-name> \
-     --endpoint https://api.devx.raindb.gignit.com/graphql \
-     --tenant <tenant-id> \
-     --api-key <rgr1...>
-   ```
-
-   Now every `raindb-cli` command runs as the user's tenant.
-
-3. **Build the Bolt first.** Don't run a local server. The
-   Bolt IS your server.
-
-   - Use the **sectioned `routes.json`** shape (see "Routes --
-     two shapes accepted" below). For an SPA, six lines is
-     enough -- the CLI synthesizes the dynamic catch-all
-     automatically.
-   - Implement `onHttpRequest(ctx, req)` in `server/index.ts`.
-     Dispatch to handlers based on `req.path`.
-   - Stage any secrets the Bolt needs (3rd-party API keys,
-     JWT secret, etc.) via
-     `raindb-cli droplet create --formation lightning-secrets`.
-
-4. **Publish early. Get a URL. Iterate.**
-
-   ```bash
-   raindb-cli --profile core.devx.<app-name> lightning bolt deploy \
-     --source ./bolt --name <app-name> --auto-routes \
-     --capabilities ./bolt/capabilities.json \
-     --deployment ./bolt/deployment.json
-   ```
-
-   The output gives you `https://stormfront-<hex>.devx.raindb.gignit.com`.
-   That URL is LIVE within ~10-30 seconds (genesis provisions the
-   ALB rule). Point your client (vite, plain HTML, whatever) at
-   it and start iterating.
-
-   **Server changes:** edit code -> republish -> available within
-   seconds. The Bolt is a single deploy unit; no Docker, no
-   instance scaling, no health checks.
-
-   **Client changes:** `vite dev` against the Bolt URL via CORS
-   or vite's proxy. Republish only when you want the latest
-   client bundled into the Bolt's served `/dist`.
-
-5. **Build formations for whatever your app does.** Every
-   data shape is a formation. Pick the right primitive:
-
-   - **Entity formations** -- mutable-by-immutable-revision
-     records (users, posts, products, conversations). Use
-     `writeDroplet` / `readLatest`.
-   - **Token formations** -- counter / set / state primitives
-     (rate limits, presence, view counts). Use
-     `writeToken` / `readToken`.
-   - **Periscope tiers** -- automatic SQL views over your
-     formations (`executeSQL` works without extra setup
-     when tiers are configured).
-   - **Auto-floats** -- formation field gets uploaded to S3
-     (private + public buckets) on every write. Public-asset
-     pipelines for images, files, bundles. No CDN setup.
-   - **Bridges** -- one tenant reads another's formation
-     transparently. Cross-tenant data sharing without
-     manual replication. Most apps don't need this.
-   - **Genesis blueprints** -- declarative AWS resource
-     management (only matters if your Bolt provisions
-     downstream cloud resources).
-
-   The marketplace has working examples of all of these. Copy
-   the formation config, adapt to your shape, publish, done.
-
-6. **When the app is ready: point your custom domain.** Run:
-
-   ```bash
-   raindb-cli --profile core.devx.<app-name> lightning bolt deploy \
-     --source ./bolt --name <app-name> --auto-routes --domain <your-domain> \
-     ... # same flags as before
-   ```
-
-   First publish with a brand-new domain mints a `domainKey`
-   plaintext (returned ONCE in `NewDomainKey`; also stored
-   encrypted-at-rest in your tenant + the platform's
-   `lightning-secrets`). Subsequent republishes auto-resolve;
-   no operator action needed. Hijack attempts from other
-   tenants are rejected at the resolver pre-write gate.
-   See "Custom domain" + "Custom domain ownership" below.
-
-**You never have to:**
-- Spin up a server.
-- Pick an instance size.
-- Configure auto-scaling.
-- Set up a load balancer.
-- Configure HTTPS / certs.
-- Set up a database.
-- Run schema migrations.
-- Refactor for scale.
-- Set up a CDN for static assets.
-- Set up Redis / queues / pubsub.
-- Set up a CI/CD pipeline (republish IS the pipeline).
-- Set up cron / scheduled jobs (use cyclone scheduled actions).
-
-The CLI + the platform handle every one of those concerns. The
-agent's job is to translate human intent into a Bolt + a
-collection of formations. The platform's job is everything else.
-
----
-
-## First read: the Marketplace
-
-**Before you write code, browse the Marketplace.** The Marketplace
-is a catalog of pre-built RainDB packs covering common patterns:
-identity (`auth-email`), tenant-base formations, the Foundation
-data model (projects, folders, documents, agents), platform
-patterns, lightning runtime helpers, etc. Each pack ships with
-a `README.md`, ready-to-publish formation configs, schemas, and
-prose explaining when to use it.
-
-If you're about to build an auth layer, a tenant registry, or a
-document store -- **stop and check if a pack already solves it**.
-The Marketplace IS your seed information. Agents that skip the
-Marketplace reinvent what's already there.
-
-Browse via the dashboard's Marketplace tab on any RainDB
-environment, OR via the REST surface:
-
-```bash
-curl -H "X-API-Key: $RAINDB_API_KEY" \
-  https://api.<env>.raindb.gignit.com/api/marketplace/packs
+```
+Lambda + DynamoDB + Redis + Kafka + Cognito + Pinecone + Vertex AI + Glue + Iceberg + your-multi-tenancy-code
+                                            |
+                                            v
+                                        RainDB
 ```
 
 ---
 
-## Quickstart: detailed mechanics
-
-This is the step-by-step reference behind "Build anything" above.
-Read this when the high-level loop needs to drill into a specific
-mechanic (tenant creation, secret staging, scaffold layout, publish
-verbs, custom-domain DNS).
-
-### 1. Get a tenant + API key
-
-A RainDB tenant gives you a namespace and credentials. Create one
-via the dashboard UI on your target environment (recommended) or
-via the CLI:
+## Build a SaaS app in 60 seconds
 
 ```bash
-# Dashboard flow (recommended):
-#   1. Visit https://<env>.raindb.gignit.com
-#   2. Register an account (or log in)
-#   3. Create a Group from the home page
-#   4. Create a Tenant from the Group page; pick a realm
-#   5. Copy the API key shown in the "Tenant created" modal
-#      (this is your rgr1.* admin key -- you'll only see it once)
-
-# CLI flow (for infra automation):
-ssh raindb-<env>   # the env's instance
-~/raindb/bin/raindb-admin --profile raindb.<env> tenant create \
-  --realm <realm-id> --name my-app
-# The output includes the rgr1.* admin key. Save it.
+git clone github.com/gignit/joshua-vs-wopr  # the starter
+cd joshua-vs-wopr/bolt
+raindb-cli lightning bolt publish --profile <yours> --source . --auto-routes \
+  --capabilities ./capabilities.json --deployment ./deployment.json
+# https://stormfront-<hex>.<env>.raindb.gignit.com is live
 ```
 
-The CLI flow on a fresh local env also auto-saves a profile named
-`core.<env>.<tenant-name>` that you'll use for subsequent
-`raindb-cli` commands.
-
-### 2. Scaffold a Bolt
-
-Copy the structure from a working reference (raindb-app's bolt
-is canonical; fdn-app's bolt is also fine):
-
-```
-my-app/
-  bolt/
-    capabilities.json           # which formations + secrets you need
-    deployment.json             # mount config + ALB hints
-    routes.json                 # dispatch table (sectioned shape preferred; or --auto-routes)
-    package.json                # one dep: @raindb/agent (if you use it)
-    bin/build-bolt.sh           # vite build + raindb-cli publish
-    server/
-      types.ts                  # BoltCtx / BoltReq / BoltResp
-      http.ts                   # ok / bad / unauthorized helpers
-      auth.ts                   # JWT verify + session lookup
-      raindb.ts                 # GraphQL client (sync, ctx.fetch)
-      index.ts                  # onHttpRequest dispatcher
-      routes/
-        myFeature.ts            # one file per route domain
-  client/                       # vite + react / svelte / whatever
-```
-
-Minimum `bolt/server/index.ts`:
-
-```typescript
-import type { BoltCtx, BoltReq, BoltResp } from "./types";
-
-export async function onHttpRequest(ctx: BoltCtx, req: BoltReq): Promise<BoltResp> {
-  if (req.method === "GET" && req.path === "/api/health") {
-    return {
-      status: 200,
-      headers: { "content-type": "application/json" },
-      body: { status: "ok", service: "my-app" },
-    };
-  }
-  return { status: 404, body: { error: "not found" } };
-}
-```
-
-Minimum `bolt/capabilities.json`:
-
-```json
-{
-  "raindb": {
-    "formations": [],
-    "secrets": { "names": [] }
-  },
-  "network": { "egress": ["raindb.gignit.com"] },
-  "limits": { "memMb": 128 }
-}
-```
-
-Minimum `bolt/deployment.json`:
-
-```json
-{
-  "preferredMount": "/",
-  "healthcheckPath": "/api/health"
-}
-```
-
-### 3. Stage secrets (if your Bolt needs any)
-
-Bolts can't read environment variables. Every secret is an explicit
-named droplet in the `lightning-secrets` formation on the tenant
-the Bolt runs on. Stage them BEFORE publishing:
-
-```bash
-cat > /tmp/secrets.json <<JSON
-[
-  {"name": "my_app_api_key", "value": "rgr1.eyJ2IjoxLC..."},
-  {"name": "my_app_jwt_secret", "value": "shared-with-callers"}
-]
-JSON
-
-raindb-cli --profile core.<env>.my-app droplet create \
-  --formation lightning-secrets --file /tmp/secrets.json
-```
-
-The names you stage MUST match the names in `capabilities.json`'s
-`raindb.secrets.names` array. The runtime refuses to read secrets
-that aren't declared.
-
-### 4. Publish
-
-```bash
-raindb-cli --profile core.<env>.my-app lightning bolt publish \
-  --source ./bolt --name my-app --auto-routes \
-  --capabilities ./bolt/capabilities.json \
-  --deployment ./bolt/deployment.json
-```
-
-Output includes:
-- `BoltID` -- stable across republishes; reuse via `--name`
-- `BoltStatsID` -- scope value for the bolt's stats droplet; carried forward
-- `Revision` -- the immutable revision droplet ID for this publish
-- `Mode` -- `fresh publish` (new bolt) or `republish (server-side merge with prior droplet)`
-- `AutogenURL` -- the autogen `stormfront-<hex>.<env>.raindb.gignit.com`
-
-Wait ~10-30 seconds for genesis to provision the ALB listener rule,
-then:
-
-```bash
-curl https://stormfront-<your-hex>.<env>.raindb.gignit.com/api/health
-# -> {"status":"ok","service":"my-app"}
-```
-
-**Single round trip + server-side merge.** As of FD-65 (see
-`raindb-phoenix-lightning/docs/RAINDB_PHX_LIGHTNING.md`), publish
-is a single `publishBolt` GraphQL mutation. The CLI sends the
-bolt manifest as one opaque JSON payload; the server resolves
-identity (name -> boltId via the `by-name-latest` pointer index),
-merges with the prior bolt droplet (so fields the operator
-didn't change are carried forward), ensures the
-lightning-bolt-stats token droplet exists, and writes one new
-immutable revision. You don't need to track the BoltID manually
--- republishing by name reuses everything.
-
-### 5. Iterate
-
-Edit a route handler. Rebuild + republish:
-
-```bash
-raindb-cli --profile core.<env>.my-app lightning bolt publish \
-  --source ./bolt --name my-app --auto-routes \
-  --capabilities ./bolt/capabilities.json \
-  --deployment ./bolt/deployment.json
-# Mode: republish (server-side merge with prior droplet)
-# Reuses BoltID + BoltStatsID by name match -- same URL, new revision.
-# ~5-15 seconds per cycle.
-```
-
-The server-side merge means you can omit flags you don't need to
-change. If you're only iterating on the bundle (e.g. fixing a
-handler), the routes/capabilities/deployment/domain all carry
-forward from the prior droplet automatically.
-
-Wrap that in a 10-line `fswatch` watcher script if you want
-auto-publish on file change. Example:
-
-```bash
-#!/usr/bin/env bash
-# bolt/bin/watch.sh -- republish on TS change
-fswatch -o ./server | while read; do
-  raindb-cli --profile core.dev.my-app lightning bolt publish \
-    --source ./bolt --name my-app --auto-routes \
-    --capabilities ./bolt/capabilities.json \
-    --deployment ./bolt/deployment.json
-done
-```
-
-For the client, run `vite` normally and proxy `/api/*` and `/auth/*`
-to your Bolt's autogen URL in `vite.config.ts`. Or skip the proxy
-and call the Bolt URL directly with CORS headers.
-
-### 6. Custom domain (optional)
-
-If you want `https://my-app.<env>.raindb.gignit.com` (or any other
-hostname pointed at the bolt-ALB), publish with `--domain`:
-
-```bash
-raindb-cli --profile core.<env>.my-app lightning bolt publish \
-  --source ./bolt --name my-app --auto-routes --domain my-app.<env>.raindb.gignit.com \
-  ...
-```
-
-This sets the manifest's `domain` field and tells genesis to add
-a matching ALB host-header rule. You still need to add a Route53
-record (A-alias or CNAME) pointing the hostname at the bolt-ALB
-unless the domain falls inside a controlled zone (the apex swap
-happens automatically for `<env>.raindb.gignit.com`-style names).
-The publish output includes a `dnsInstructions` block with the
-exact AWS CLI commands when manual DNS is needed.
-
-**First-claim flow.** The FIRST time any tenant publishes a bolt
-with a brand-new `--domain`, the publish output includes a
-one-time `NewDomainKey` value:
-
-```
-NewDomainKey: hL+fIImo2U8HtMny4pBUwGuyx50EtaDagnwM7wQkXao=
-              ^-- ONE-TIME disclosure. Save this if you may need to
-                  transfer the domain to another tenant later.
-```
-
-This is the domain-ownership key. It's stored encrypted-at-rest
-on both your tenant AND the platform tenant; you don't NEED to
-save it (republishes auto-resolve from your tenant's
-lightning-secrets formation). Save it only if you plan to transfer
-the domain to another tenant later. See section "Custom domain
-ownership" below for the full model.
-
-**Cross-tenant hijack defense.** A different tenant attempting
-to publish a bolt with the same `--domain` is rejected by the
-resolver with:
-
-```
-error: publishBolt: domain "<x>" is already claimed by a
-different bolt; supply the matching domainKey for legitimate
-transfer
-```
-
-The defense lives in the `publishBolt` mutation's pre-write
-gate -- the rejection happens BEFORE any droplet is written, so
-the routing for the legitimate bolt is never disturbed.
-
-**Same-tenant multi-bolt-per-domain works automatically.** If
-you want multiple bolts in the same tenant to share a domain
-(for future explicit-route composition), publish each one with
-the same `--domain`; the resolver's auto-inject path supplies
-the key from your tenant's lightning-secrets each time.
+That's the loop. Edit, re-publish, ~30s. No containers, no provisioning, no migrations.
 
 ---
 
-## How-to: common tasks
+## What you get out of the box
 
-### Read a droplet
-
-```typescript
-import type { BoltCtx } from "./types";
-
-function getUser(ctx: BoltCtx, email: string) {
-  const url = ctx.secrets.get("my_app_api_key_url"); // raindb-api graphql endpoint
-  const apiKey = ctx.secrets.get("my_app_api_key");
-
-  const res = ctx.fetch(url, {
-    method: "POST",
-    headers: {
-      "X-API-Key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query: `
-        query ReadLatest($input: ReadLatestInput!) {
-          readLatest(input: $input) {
-            dropletId payload
-          }
-        }
-      `,
-      variables: {
-        input: { formationId: "my-app-user", indexId: "by-email-latest", scopeValue: email },
-      },
-    }),
-  });
-
-  const data = JSON.parse(res.body);
-  return data?.data?.readLatest?.payload || null;
-}
-```
-
-`ctx.fetch` is **synchronous** in goja. No `await`. The response
-has `.status`, `.headers`, `.body` (string).
-
-### Mint a JWT
-
-```typescript
-const claims = { userId: "...", email: "...", role: "user" };
-const token = ctx.jwt.sign("my_app_jwt_secret", claims, 86400); // 1 day
-```
-
-### Verify a password
-
-```typescript
-const hash = ctx.crypto.hashPassword(plaintext, 12);
-const ok = ctx.crypto.verifyPassword(plaintext, hash);
-```
-
-### Routes -- two shapes accepted
-
-The CLI accepts `bolt/routes.json` in either form. **Sectioned is
-preferred for new bolts** -- it deduplicates declarations across
-HTTP methods and supports `block` + `redirect` first-class. Flat
-array is the legacy form, still fully supported.
-
-#### Sectioned form (preferred)
-
-Group entries by purpose. The CLI assembles them into the final
-ordered route table in the right resolution order automatically:
-block first, then redirect, then static-specific, then dynamic
-routes, then static-fallback (the `/*` catch-all).
-
-```json
-{
-  "block": [
-    { "path": "/.env",       "status": 404 },
-    { "path": "/.git/*",     "status": 404 }
-  ],
-  "redirect": [
-    { "path": "/old/(.+)",   "status": 301, "to": "/new/$1" }
-  ],
-  "static": [
-    { "path": "/assets/*",   "publicAsset": "assets/" },
-    { "path": "/*",          "publicAsset": "index.html" }
-  ],
-  "routes": [
-    { "method": "POST",      "path": "/webhooks/*", "handler": "onHttpRequest" }
-  ]
-}
-```
-
-Field reference:
-
-| Section | Fields | Notes |
-|---|---|---|
-| `block` | `path` (required), `status` (required), `method` (optional) | Reject matching requests with the given status. Use for `/.env`, `/.git/*`, scanner traps. |
-| `redirect` | `path` (required), `to` (required), `status` (optional, default 302), `method` (optional) | 301 / 302 / 307 / 308 supported. Capture groups in `path` are interpolated into `to`. |
-| `static` | `path` (required), `publicAsset` (required) | `publicAsset` is the path AT THE ROOT OF THE ZIP that lightningbuild produces. The float pipeline adds the public-bucket `files/` prefix; don't include it here. |
-| `routes` | `path` (required), `handler` (required), `method` (optional) | Dynamic handler dispatch. Method omitted = matches any. |
-
-**Automatic catch-all synthesis.** If you declare ONLY static
-entries (the typical SPA case -- like raindb-app's `bolt/routes.json`),
-the CLI synthesizes a `{path: "/*", handler: "onHttpRequest"}` route
-BEFORE the static `/*` fallback. So:
-
-```json
-{
-  "static": [
-    { "path": "/assets/*", "publicAsset": "assets/" },
-    { "path": "/*",        "publicAsset": "index.html" }
-  ]
-}
-```
-
-becomes equivalent to:
-
-```
-1. /assets/* static -> assets/
-2. /* dynamic -> onHttpRequest        (auto-synthesized)
-3. /* static -> index.html            (SPA fallback)
-```
-
-Dynamic handler tries first; on 404 the static `/*` serves
-`index.html` so client-side routing works on hard refresh.
-
-Add a `routes` section to control the dynamic-route shape
-explicitly (e.g. only `/api/*` + `/auth/*`) -- the auto-catch-all
-is suppressed when ANY `routes` entry is present.
-
-#### Flat array (legacy)
-
-Same final shape, declared as one ordered list. Useful if you
-want to inline a redirect between specific dynamic routes, or
-you're porting an existing config:
-
-```json
-[
-  { "method": "GET",  "path": "/api/*",  "handler": "onHttpRequest" },
-  { "method": "POST", "path": "/api/*",  "handler": "onHttpRequest" },
-  { "method": "GET",  "path": "/auth/*", "handler": "onHttpRequest" },
-  { "method": "POST", "path": "/auth/*", "handler": "onHttpRequest" },
-  { "static": { "path": "/assets/*", "publicAsset": "assets/" } },
-  { "static": { "path": "/*",        "publicAsset": "index.html" } }
-]
-```
-
-Note the static entries wrap their fields inside a `static`
-object (`{"static": {"path": ..., "publicAsset": ...}}`) in the
-flat form. The sectioned form lets you list them at the top
-level under the `static` key.
-
-#### SPA setup checklist
-
-Stage `bolt/client/dist/` (from `vite build`) before publishing.
-The publisher bundles it into the Bolt's asset tree. The
-sectioned-routes pattern raindb-app uses is the canonical SPA
-template:
-
-```json
-{
-  "static": [
-    { "path": "/assets/*", "publicAsset": "assets/"   },
-    { "path": "/*",        "publicAsset": "index.html" }
-  ]
-}
-```
-
-Six lines. The CLI does the rest.
-
-### Call raindb-api's REST surfaces
-
-raindb-api exposes canonical REST endpoints for marketplace,
-LLM providers, formations, and more. **Prefer these over rolling
-your own SQL** -- they exist precisely so consumers don't
-reimplement projection logic that already lives in the platform.
-
-```typescript
-const apiBase = ctx.secrets.get("my_app_api_base"); // "http://localhost:8080" or remote
-const res = ctx.fetch(`${apiBase}/api/marketplace/packs`, {
-  method: "GET",
-  headers: { "X-API-Key": ctx.secrets.get("my_app_api_key") },
-});
-return { status: res.status, body: JSON.parse(res.body) };
-```
-
-This is the pattern raindb-app's marketplace routes use. ~80
-lines of proxy code instead of ~230 lines of duplicated SQL.
-
-### Custom domain ownership
-
-When a Bolt is published with `--domain <hostname>`, the
-`publishBolt` mutation enforces ownership via a per-domain
-secret in the existing `lightning-secrets` formation.
-
-**Read your tenant's domain key.** Auto-decrypts on read:
-
-```bash
-raindb-cli --profile <your-profile> droplet read-latest \
-  lightning-secrets by-name-latest 'domainKey:<domain>'
-```
-
-The `value` field is the plaintext key.
-
-**Cross-tenant transfer.** When tenant A wants to hand a custom
-domain to tenant B:
-
-1. Tenant A reads their `domainKey:<domain>` value (above).
-2. A hands the plaintext to B out-of-band.
-3. B publishes with the manifest's `payload.domainKey` field
-   set to the supplied plaintext (e.g. by editing the bolt's
-   source or via a custom publish wrapper). The resolver
-   pre-write gate verifies B's supplied key matches the
-   platform-side claim and accepts the transfer; routing for
-   the domain follows B's new bolt droplet.
-4. The resolver also writes the key to B's lightning-secrets
-   so B's subsequent republishes auto-resolve.
-5. Optional: A deletes their stale lightning-secrets entry
-   once transfer is confirmed.
-
-**Same-tenant multi-bolt-per-domain.** Architectural-level
-supported today; routing composition between multiple bolts at
-the same domain (e.g. one bolt handles `/auth/*`, another
-handles `/api/*`) requires future routing-layer work that
-isn't yet shipped. The ownership claim model doesn't block it.
-
-For the full architecture see
-`raindb-phoenix-lightning/docs/RAINDB_CUSTOM_DOMAIN.md` section
-"Domain ownership claims (FD-65 -- shipped)" and FD-65 in
-`raindb-phoenix-lightning/docs/RAINDB_PHX_LIGHTNING.md`.
+| You'd normally pay for | RainDB gives you |
+|---|---|
+| Database (Postgres/DynamoDB) | tenant-scoped formations on S3 -- `ctx.db.<id>.{readLatest, writeDroplet, listKeys}` |
+| Cache (Redis) | object cache + wire mesh, 90% hit rate, no operator burden |
+| Pub/sub (Kafka/SNS) | droplet writes -> SSE wakeups, browser-direct |
+| Vector DB (Pinecone) | chunks + embeddings formations in `foundation` pack |
+| LLM agent runtime (LangChain) | `@raindb/agent` -- this package, embedded in your bolt |
+| Real-time push (WebSockets) | Phase 7 SSE wakeups + Phase 8 streaming responses |
+| Auth (Cognito) | `ctx.iam.mintWireToken`, `ctx.jwt`, `ctx.crypto` |
+| Secrets manager | `lightning-secrets` formation, `ctx.secrets.get(name)` |
+| Datalake (Glue+Athena+Iceberg) | periscope cascade -- operational data IS the lake, no ETL |
+| Marketplace (AWS MP) | `raindb-cli pack publish`, install across tenants |
 
 ---
 
-## DO / DO NOT
+## Marketplace: 12 packs install in one command
 
-### DO
+Packs are vendor-published data models + bolts. `raindb-cli pack install <name>` and the formations land on your tenant.
 
-- **Browse the Marketplace before writing anything.** If a pack
-  exists, use it.
-- **Use `readLatest` / `writeDroplet` / `readToken` for platform
-  reads.** SQL is for your own entity tables; bridged-from-platform
-  formations are unreliable from SQL on non-platform tenants.
-- **Walk indexes for "list all X" patterns.** `listAllKeys("indexes/
-  <formation>/by-<index>/")` + per-id `readLatest` is the canonical
-  Tier 2.5 pattern.
-- **Declare every secret in `capabilities.json`.** The runtime
-  refuses to read undeclared names.
-- **Use `--profile <env>` to target different environments.** Same
-  publish command, different profile. Don't hardcode endpoint URLs.
-- **Reuse `BoltID` across republishes.** The CLI matches by name
-  automatically; save the `BoltID` from the first publish if you
-  want to be explicit.
-- **Match raindb-api's canonical surfaces when proxying.** Marketplace,
-  LLM providers, formation discovery -- raindb-api has REST endpoints
-  for these. Use them; don't reimplement.
+| Pack | What it gives you |
+|---|---|
+| `foundation` | Document RAG: chunks, embeddings, projects, folders, chat sessions, chat messages, coworkers, memberships. The whole AI-over-documents stack. |
+| `social` | DM + group chat patterns. `pairKey` index for symmetric 1:1 lookups. See `CHAT_PATTERNS.md` in the pack for the canonical asc/desc/poll cursor pattern. |
+| `tenant-base` | Per-tenant infrastructure: `lightning-secrets`, `lightning-bolts`, `lightning-bolt-stats`. Every tenant has these. |
+| `lightning` | Platform-side bolt deployment formations. The dispatcher reads from these. |
+| `core` | Platform-realm + env config + bridge-machinery formations. Realm-blueprint level. |
+| `foundation-platform` | Users, groups, memberships, tenants, tenant keys. The control-plane data model. |
+| `platform-runtime` | Genesis provisioner config, AWS environment binding. Realm-genesis-level wiring. |
+| `platform-services` | Cyclone/scheduler/wire/cache shared service formations. |
+| `media-photos` | Photo + album with binary float support. Reference for binary-asset float pipeline. |
+| `finance-transactions` | Ledger pattern: append-only transactions, balance derivation. |
+| `real-estate-listings` | MLS-shaped: property listings + property images. |
+| `user-auth-email` | Email/password identity + verification flow. |
+| `guide-patterns` | The canonical RainDB design patterns doc -- read this BEFORE designing your own formation. |
 
-### DO NOT
-
-- **Don't use `process.env.X`.** The goja sandbox has no env.
-  Substitute `ctx.secrets.get("name")`.
-- **Don't pull in Node-only deps.** `fs`, `child_process`,
-  `bcrypt` (npm), native binaries -- all fail at runtime. Use
-  `ctx.crypto`, `ctx.jwt`, `ctx.ids`, `ctx.cookies` instead.
-- **Don't `await ctx.fetch(...)`.** It's sync. Returns immediately
-  with `.status` / `.body`. Mixing `await` works but adds noise.
-- **Don't run SQL against bridged platform formations from a non-
-  platform tenant.** The view may not be registered locally; you'll
-  get either "table does not exist" or null projections. Use
-  `readLatest` or proxy raindb-api's canonical handler.
-- **Don't put the `static` route's path outside the static object
-  (flat-form only).** In the flat array form it's
-  `{"static": {"path": "/*", "publicAsset": "index.html"}}`,
-  NOT `{"path": "/*", "static": {"publicAsset": "..."}}`. The wrong
-  shape gets silently ignored by the dispatcher. The **sectioned
-  form** doesn't have this gotcha -- entries under the `static`
-  key are listed at top level. Prefer sectioned for new bolts.
-- **Don't use `--auto-routes` if your app has non-`/api/*` paths**
-  (like `/auth/*`). Auto-routes only registers `/api/*` + statics.
-  Write explicit `routes.json` for everything else. The sectioned
-  form makes this cheap -- list your routes under `"routes": [...]`
-  and your statics under `"static": [...]`.
-- **Don't assume `executeSQL` rows are array-of-arrays.** Phoenix
-  returns array-of-objects in some paths. Normalize via the helper
-  function in your `raindb.ts` (sniff `Array.isArray(rows[0])`).
-- **Don't try to install your Bolt's tenant on the platform tenant
-  itself.** The publish path requires a bridge between source tenant
-  and platform; the platform tenant doesn't have one to itself.
-  Use a dedicated tenant.
-
----
-
-## Troubleshooting
-
-### `route_not_found` for static asset paths
-
-If your `routes.json` is the **flat array form**, the dispatcher
-requires `{"static": {"path": ..., "publicAsset": ...}}` -- path
-goes INSIDE the static object. The wrong shape (path at top level
-+ static carrying only publicAsset) gets silently ignored.
-
-Easier fix: switch to the **sectioned form** which lists static
-entries at the top level under the `static` key. No nesting
-confusion possible. See "Routes -- two shapes accepted" above.
-
-### `Table with name <foo> does not exist`
-
-You're running SQL against a formation that isn't registered in the
-periscope view for the calling tenant. Either:
-- Pass `--formationId` hint to executeSQL (triggers prelude attach)
-- Switch to `readLatest` / `writeDroplet` -- the GraphQL ops work
-  through the bridge automatically
-- If it's a marketplace / LLM provider read, use raindb-api's REST
-  surface instead of rolling your own SQL
-
-### `bridge mirror forward to ... not found`
-
-You're publishing to a tenant that doesn't have a bridge to the
-platform tenant. Bolts run on tenants WITH a bridge auto-provisioned
-on `tenant create`. The platform tenant itself doesn't have a
-bridge to itself; publish to a different tenant.
-
-### Bolt returns null values for every field
-
-Almost always: your SQL returned the right column SHAPE but the
-view projection is misbehaving on the calling tenant. Switch from
-SQL to `readLatest` (for single-record reads) or proxy raindb-api
-(for catalog-style reads). See the marketplace lesson in raindb-
-app's git history for the canonical fix pattern.
-
-### Custom domain returns `route_not_found`
-
-Genesis hasn't finished provisioning the ALB listener rule, OR
-your Route53 record isn't pointing at the bolt-ALB yet. Check:
-1. The published manifest's `customDomainStatus` field
-2. `dig <hostname>` -- it should resolve to the bolt-ALB's IPs
-3. The `dnsInstructions` block in your publish output -- it has
-   the exact Route53 change-batch JSON
-
-### Publish fails with `domain "<x>" is already claimed by a different bolt`
-
-The domain you're trying to claim is already owned by another
-tenant. Two cases:
-
-- **Domain is owned by you in a DIFFERENT tenant.** You need to
-  transfer ownership: read the `domainKey:<domain>` value from
-  the owning tenant's lightning-secrets (auto-decrypts on read),
-  then publish from the target tenant with the manifest's
-  `payload.domainKey` set to that plaintext. The resolver
-  pre-write gate verifies and accepts the transfer.
-
-- **Domain is owned by someone else.** The publish is correctly
-  rejected. You can either pick a different domain or contact
-  the owning tenant for a legitimate transfer.
-
-The error fires at the resolver's pre-write gate, so no droplet
-is written and the legitimate bolt's routing is undisturbed.
-
-### Stats emission warnings (`drop-tolerant`) -- not seen anymore
-
-The first publish of a Bolt no longer logs
-`lightning-bolt-stats ... not found` warnings. As of FD-65, the
-publishBolt mutation ensures the lightning-bolt-stats token
-droplet exists server-side BEFORE the bolt droplet is written;
-the dispatcher's first invocation lands on a populated token.
-If you see these warnings, you're likely on a pre-FD-65 build
-of the platform.
+Browse: `~/src/raindb-base/vendors/raindb/packs/<pack>/` -- each has `pack.json`, `formations/`, often a `README.md` and `*PATTERNS.md`.
 
 ---
 
 ## Reference apps to copy from
 
-- **`~/src/raindb-app/bolt/`** -- the RainDB Platform dashboard Bolt.
-  Full identity + tenant management surface. 67 routes. Canonical
-  reference for any auth-heavy app.
-- **`~/src/fdn-app/bolt/`** -- the Foundation document-store Bolt.
-  CRUD on projects / folders / documents / agents. Canonical
-  reference for any content-heavy app.
+| Repo | Demonstrates | Read it when |
+|---|---|---|
+| `github.com/gignit/joshua-vs-wopr` | Minimal LLM bolt: tic-tac-toe + chat, ~700 lines of plain JS, SSE streaming responses, Phase 7 wakeups. | You're new. Read this first. |
+| `github.com/gignit/super-calculator` | Streaming agent UI patterns + multi-tool LLM loop. | You're building an AI-augmented productivity bolt. |
+| `github.com/gignit/fdn-app` | Production RAG: documents, multi-project, multi-user, agent + tool calls, full SPA. | You're building a Foundation-pack-shaped knowledge product. |
 
-Both bolts have been live-tested through their full surfaces on
-devx. The architectural patterns they share are documented above.
-The patterns that differ (raindb-app proxies a lot; fdn-app
-agent-runs) reflect their different surface choices, not different
-correct ways to write a Bolt.
+---
+
+## What an agent (human or AI) needs to know
+
+Read in order. Each pointer is one file.
+
+1. **Mental model**: `~/src/raindb-base/vendors/raindb/packs/guide-patterns/` -- formations, droplets, indexes, listKeys + UUIDv7. The substrate.
+2. **Build a bolt**: `raindb-phoenix-lightning/docs/RAINDB_LIGHTNING_TENANT_GUIDE.md` -- the TypeScript developer manual. ~21k words; read by section.
+3. **Engine internals (when you need to extend Lightning itself)**: `raindb-phoenix-lightning/docs/RAINDB_LIGHTNING_PLATFORM_GUIDE.md`.
+4. **Find a pack**: `ls ~/src/raindb-base/vendors/raindb/packs/`, then `cat <pack>/pack.json` + `ls <pack>/formations/`.
+5. **Find a pattern**: `<pack>/README.md` + `<pack>/*PATTERNS.md` + `<pack>/TROUBLESHOOTING.md` if it exists.
+6. **Find an example bolt**: clone one of the three reference repos.
+
+That's it. Six files, six pointers.
+
+---
+
+## Anatomy of a bolt
+
+```
+bolt/
+  capabilities.json   # what the bolt can touch (formations, secrets, network, limits)
+  routes.json         # how requests reach handlers (block / static / sse / dynamic)
+  deployment.json     # mount + healthcheck hints
+  server/index.ts     # exports onHttpRequest(ctx, req) -> Response | streams
+  client/             # optional SPA assets
+  formations/         # optional bolt-bundled formation configs + schemas
+```
+
+```typescript
+// server/index.ts
+exports.onHttpRequest = async (ctx, req) => {
+  if (req.path === '/api/messages' && req.method === 'POST') {
+    const msg = JSON.parse(req.body);
+    msg.messageId = ctx.ids.uuidv7();
+    await ctx.db['fdn-chat-messages'].writeDroplet(msg);
+    return { status: 200, headers: {}, body: JSON.stringify({ ok: true }) };
+  }
+  return { status: 404, headers: {}, body: 'not found' };
+};
+```
+
+Tenant-scoped, sandboxed (goja JS runtime), invocation-isolated. The `ctx` object is the entire environment -- no `process`, no `fs`, no surprises.
+
+---
+
+## The @raindb/agent package (this repo)
+
+A TypeScript LLM agent runtime + tool catalog. Embed in your bolt's handler when you want the bolt to talk to a model with tool-calling.
+
+```typescript
+import { runAgent } from '@raindb/agent';
+
+await runAgent({
+  ctx, req, openaiApiKey: ctx.secrets.get('openai_api_key'),
+  tools: [/* RegisteredTool[] */],
+  onEvent: (e) => ctx.response?.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`),
+});
+```
+
+`fdn-app/bolt/server/routes/chat.ts` is the canonical worked example. Streams agent thinking + tool calls + final reply chunk-by-chunk via Phase 8 streaming responses.
 
 ---
 
 ## Where to ask questions
 
-- **Architecture / new pattern questions**: read the reference Bolts
-  first. If still stuck, the marketplace `guide-patterns` pack
-  contains long-form rationale for platform-wide design decisions.
-- **CLI questions**: `raindb-cli help` and `raindb-admin help` are
-  thorough. Every subcommand has `--help`.
-- **Bug reports / feature requests**: the RainDB Phoenix repo
-  (`~/src/raindb-phoenix-lightning/` if you have it locally).
+- The pack README + PATTERNS + TROUBLESHOOTING docs are usually the answer.
+- The reference bolts (`joshua-vs-wopr`, `super-calculator`, `fdn-app`) are the second answer.
+- The two lightning guides cover everything else.
+
+Six pointers. One substrate. Ship.
