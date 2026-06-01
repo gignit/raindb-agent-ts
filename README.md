@@ -20,12 +20,126 @@ Lambda + DynamoDB + Redis + Kafka + Cognito + Pinecone + Vertex AI + Glue + Iceb
 ```bash
 git clone github.com/gignit/joshua-vs-wopr  # the starter
 cd joshua-vs-wopr/bolt
-raindb-cli lightning bolt publish --profile <yours> --source . --auto-routes \
+raindb-cli lightning bolt deploy --profile <yours> --name joshua-vs-wopr \
+  --source . --auto-routes \
   --capabilities ./capabilities.json --deployment ./deployment.json
 # https://stormfront-<hex>.<env>.raindb.gignit.com is live
 ```
 
-That's the loop. Edit, re-publish, ~30s. No containers, no provisioning, no migrations.
+That's the loop. Edit, re-deploy, ~30s. No containers, no provisioning, no migrations.
+
+`deploy` is one-shot publish + activate (the 95% common case --
+matches `gcloud run deploy`, `wrangler deploy`, `vercel deploy`). Use
+`raindb-cli lightning bolt publish ... --no-activate` if you want a
+canary revision without traffic shift. Add `--domain
+<host>.raindb.gignit.com` to bind a canonical hostname instead of
+the autogen `stormfront-<hex>.<env>.raindb.gignit.com`.
+
+---
+
+## Iterate locally, ship to the live edge
+
+Once a bolt is deployed, the iteration loop is even tighter than the
+initial publish. The pattern below is what the raindb-app frontend
+uses to develop against the **live, deployed bolt** without standing
+up any local backend:
+
+```
+   localhost Vite dev (:4001)
+              |
+              |  /api/*, /auth/*    (proxied)
+              v
+   https://<your-bolt>.devz.raindb.gignit.com
+              |
+              v
+        live RainDB on devz
+```
+
+No local Express, no local API key, no env file gymnastics. The
+deployed bolt holds every secret it needs; your local Vite client
+just talks to it.
+
+### One-time wiring
+
+Add a proxy to `vite.config.js`:
+
+```js
+// vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  build: {
+    // Emit every asset as a hashed file under dist/assets/ instead of
+    // inlining sub-4KB assets as data: URLs. The bolt serves these as
+    // S3-backed static droplets -- you want them as files.
+    assetsInlineLimit: 0,
+  },
+  server: {
+    port: 4001,
+    proxy: {
+      '/api':  { target: 'https://<your-bolt>.devz.raindb.gignit.com', changeOrigin: true, secure: true },
+      '/auth': { target: 'https://<your-bolt>.devz.raindb.gignit.com', changeOrigin: true, secure: true },
+    },
+  },
+});
+```
+
+Then your normal dev loop renders React locally with HMR, while every
+API call hits the live deployed bolt. JWTs minted by the live bolt
+flow back into your localhost session because the proxy preserves
+cookies. CORS is sidestepped because the browser thinks it's talking
+to `localhost:4001`.
+
+### Push changes back up
+
+When you like what you see locally, ship it:
+
+```bash
+cd client && npm run build       # vite build -> dist/
+rm -rf ../bolt/client/dist
+cp -r dist ../bolt/client/dist   # stage the build artifact into the bolt
+cd ../bolt
+raindb-cli --profile <yours> lightning bolt deploy <bolt-name>
+# ~5s later: new revision is active on the same URL
+```
+
+That's it. Refresh the browser. (See the
+[cache TTL note](#cache-ttl) below if the HTML looks stale.)
+
+### What an AI agent should know to execute this loop
+
+For an agent doing this autonomously, these are the only facts that
+matter:
+
+| Fact | Value |
+|---|---|
+| Profile to use | `core.<env>.<tenant-slug>` (find in `~/.config/raindb-cli/config`) |
+| Build command | `cd client && npm run build` (Vite project) |
+| Stage step | `cp -r client/dist bolt/client/dist` (the bolt bundles whatever's there at publish time) |
+| Deploy command | `raindb-cli --profile <profile> lightning bolt deploy <bolt-name>` |
+| Deploy duration | 5-10 seconds wall clock |
+| Bolt URL | from `raindb-cli lightning bolt info <bolt-name>` -> `autogenDomain` or custom domain |
+| Verify | `curl https://<host>/api/health` (200) AND `curl https://<host>/ \| grep -oE '/assets/[^"]+'` to see new asset hashes |
+
+<a id="cache-ttl"></a>
+### Cache TTL gotcha
+
+The bolt sends `cache-control: public, max-age=60` on HTML by
+default. Within 60 seconds of a deploy, the canonical URL may still
+hand out the prior revision's HTML even though the new revision is
+active. To verify a deploy without waiting, use a query string the
+cache doesn't recognise:
+
+```bash
+curl -sS "https://<your-bolt>.devz.raindb.gignit.com/?v=$(date +%s)" \
+  | grep -oE '/assets/[^"]+'
+# should show the asset hashes from your latest build
+```
+
+CSS / JS / image assets are content-hashed and immutable, so they
+don't have this problem -- only `index.html` does.
 
 ---
 
