@@ -110,6 +110,16 @@ export interface AgentResult {
   history: ChatCompletionMessageParam[];
   /** Per-tool-call records useful for chat-history persistence. */
   toolEvents: ToolEvent[];
+  /**
+   * Token accounting, summed across every chatCompletion call this run
+   * made (multiple when tools iterate). Absent when the provider returned
+   * no usage on any call. Hosts surface this for cost/usage diagnostics.
+   */
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 /**
@@ -142,6 +152,15 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
   const toolEvents: ToolEvent[] = [];
   let totalToolCalls = 0;
 
+  // Token accounting, summed across every chatCompletion call. Stays
+  // undefined unless at least one provider response carried usage.
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let totalTokens = 0;
+  let sawUsage = false;
+  const usageOut = () =>
+    sawUsage ? { promptTokens, completionTokens, totalTokens } : undefined;
+
   const maxIterations = clampIterations(opts.maxIterations);
 
   // Resolve the chat model once per turn. Switching models mid-loop
@@ -166,6 +185,14 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
       tools: chatTools.length > 0 ? chatTools : undefined,
     });
 
+    // Accumulate token usage when the provider reported it.
+    if (completion.usage) {
+      sawUsage = true;
+      promptTokens += completion.usage.prompt_tokens ?? 0;
+      completionTokens += completion.usage.completion_tokens ?? 0;
+      totalTokens += completion.usage.total_tokens ?? 0;
+    }
+
     const choice = completion.choices[0];
     const assistantMsg = choice?.message;
     const respContent = assistantMsg?.content ?? '';
@@ -187,6 +214,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
         durationMs: Date.now() - start,
         history: messages,
         toolEvents,
+        usage: usageOut(),
       };
     }
 
@@ -334,6 +362,7 @@ export async function runAgent(opts: RunAgentOptions): Promise<AgentResult> {
     durationMs: Date.now() - start,
     history: messages,
     toolEvents,
+    usage: usageOut(),
   };
 }
 
