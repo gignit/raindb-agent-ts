@@ -32,12 +32,26 @@ export interface DropletResult {
   dropletId: string;
   formationId: string;
   schemaVersion: number;
-  ts: string;
+  /**
+   * Write timestamp in Unix MILLISECONDS as a NUMBER. The GraphQL Time
+   * scalar marshals via strconv.FormatInt(UnixMilli, 10) -- a bare JSON
+   * number, not a string (raindb internal/api/graph/model/scalars.go
+   * MarshalTime). Was mistyped `string`, which broke date math on every
+   * consumer; corrected to match the wire + @raindb/bolt-sdk Droplet.ts.
+   */
+  ts: number;
   author: string;
   tenantId?: string;
   batchId?: string;
   payload: Record<string, unknown> | null;
-  floatMeta?: Record<string, unknown> | null;
+  /**
+   * Per-float metadata records, one entry per floated binary field -- an
+   * ARRAY (GraphQL Droplet.floatMeta is [JSON!], Go []JSON). Present only
+   * when the droplet has floated fields (omitempty; omitted, never null).
+   * Was mistyped as a single nullable object; corrected to match the wire
+   * + @raindb/bolt-sdk Droplet.floatMeta.
+   */
+  floatMeta?: Record<string, unknown>[];
   pointerETag?: string | null;
 }
 
