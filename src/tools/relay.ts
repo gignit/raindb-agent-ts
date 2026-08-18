@@ -241,7 +241,13 @@ export const relay_queue: RegisteredTool = {
       return { error: 'queueFormation required' };
     }
     const formationFilter = stringArg(args, 'formationFilter');
-    let prefix = `relays/queue/${queueFormation}/`;
+    // Queue tokens live under the by-formation index, NOT relays/queue/. This is
+    // the canonical tenant-relative prefix from raindb-prime
+    // pkg/paths.RelayQueueTokenRelPrefix (indexes/<queueFormation>/by-formation/
+    // [<formationFilter>/]), consumed by internal/ops.RelayQueueList. The prior
+    // relays/queue/<f>/ prefix matched nothing, so relay_queue always returned []
+    // (a shipped-tool defect the tsdk relay_queue live test surfaced).
+    let prefix = `indexes/${queueFormation}/by-formation/`;
     if (formationFilter) {
       prefix += `${formationFilter}/`;
     }
