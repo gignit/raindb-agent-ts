@@ -64,7 +64,12 @@ export interface DropletPage {
 export interface KeyEntry {
   key: string;
   size: number;
-  lastModified: string;
+  // GraphQL KeyEntry.lastModified is the Time! scalar -> Unix-MILLISECONDS
+  // NUMBER over the wire. (NB: this differs from the goja-host binding used by
+  // @raindb/bolt-sdk, which emits an RFC3339 string for engine parity -- that
+  // is the HOST boundary, not the GraphQL wire this raw client decodes.)
+  lastModified: number;
+  etag?: string;
 }
 
 export interface KeyPage {
@@ -179,6 +184,7 @@ const LIST_KEYS_QUERY = `
         key
         size
         lastModified
+        etag
       }
       nextCursor
       hasMore

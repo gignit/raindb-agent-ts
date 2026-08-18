@@ -41,7 +41,10 @@ import type { RegisteredTool, ToolArgs } from '../registry/types.js';
 interface KeyEntry {
   key: string;
   size?: number;
-  lastModified?: string;
+  // GraphQL KeyEntry.lastModified is the Time! scalar -> Unix-MILLISECONDS
+  // NUMBER over the wire (reconciled against raindb-prime model KeyEntry).
+  lastModified?: number;
+  etag?: string;
 }
 
 interface KeyPage {

@@ -20,11 +20,16 @@ import type { RegisteredTool } from '../registry/types.js';
 export interface APIKeyInfo {
   apiClientId: string;
   tenantId: string;
+  name?: string | null;
   scopes: string[];
-  createdAt: string;
-  expiresAt?: string;
-  createdBy?: string;
-  lastUsedAt?: string;
+  // createdAt/expiresAt/lastUsedAt are the GraphQL Time! scalar, which
+  // serializes as a Unix-MILLISECONDS NUMBER (not an ISO string). Decoding
+  // them as `string` silently mistypes the value. createdBy is String! on the
+  // wire (always present). Reconciled against raindb-prime model.APIKeyInfo.
+  createdAt: number;
+  expiresAt?: number | null;
+  createdBy: string;
+  lastUsedAt?: number | null;
 }
 
 export interface APIKeyPage {
@@ -42,7 +47,9 @@ export interface CreateKeyResult {
 
 export interface RevokeKeyResult {
   apiClientId: string;
-  revokedAt?: string;
+  // revokedAt is the GraphQL Time! scalar -> Unix-MILLISECONDS NUMBER, not an
+  // ISO string. Reconciled against raindb-prime model.RevokeAPIKeyResult.
+  revokedAt: number;
 }
 
 const LIST_API_KEYS_QUERY = `
@@ -51,6 +58,7 @@ const LIST_API_KEYS_QUERY = `
       keys {
         apiClientId
         tenantId
+        name
         scopes
         createdAt
         expiresAt
@@ -72,6 +80,7 @@ const CREATE_API_KEY_MUTATION = `
       info {
         apiClientId
         tenantId
+        name
         scopes
         createdAt
         expiresAt

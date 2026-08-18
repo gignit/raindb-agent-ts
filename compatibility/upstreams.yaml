@@ -1,0 +1,43 @@
+# Downstream-owned compatibility lock: the raindb-prime state this agent SDK's
+# GraphQL wire types were reconciled + VALIDATED against.
+#
+# This SDK is a RAW GraphQL client -- its authority is the raindb-prime SDL
+# (internal/api/graph/schema.graphqls). The GraphQL Time! scalar serializes as a
+# Unix-MILLISECONDS NUMBER (model.MarshalTime), so every field decoding a Time!
+# is `number`, never `string`. Verified with coder_go_shapes (the cross-layer
+# field matrix that grades wire vs internal boundaries) against model.* (the
+# wire type), NOT ops.* (which uses json.RawMessage for its own decode boundary).
+upstreams:
+  raindb-prime:
+    reconciled_sha: d623afa9
+    validation:
+      command: "tests/live/tsdk (node --test) via pytest --profile <p> -m tsdk"
+      result: >-
+        GREEN against prod api.raindb.io. The TS live-SDK tier creates/lists/
+        revokes a real API key through @raindb/agent and asserts the DECODED
+        APIKeyInfo.createdAt/expiresAt/lastUsedAt + RevokeAPIKeyResult.revokedAt
+        are plausible Unix-MS NUMBERS (expectUnixMs: typeof number AND 1e12<v<1e13),
+        name is selectable, createdBy present. This is the executable Validated-By,
+        not a prose claim.
+      evidence:
+        # The complete Time!-scalar surface agent-ts consumes, verified field-by
+        # -field against the SDL model type via coder_go_shapes / coder_go_gql_type:
+        - "model.APIKeyInfo.{createdAt,expiresAt,lastUsedAt} = Time -> number (was string); +name; createdBy String! required"
+        - "model.RevokeAPIKeyResult.revokedAt = Time! -> number (was string)"
+        - "model.KeyEntry.lastModified = Time! -> number (was string); +etag (droplet.ts + index_page.ts)"
+        - "model.Droplet.ts = Time! -> number (already correct, fca57dd)"
+      not_consumed:
+        # Time!-bearing SDL types agent-ts does NOT decode (no tool consumes them),
+        # so they need no change here (verified: no Tenant/Realm/Bridge/FlowState/
+        # TenantDomain/DirectUploadReservation/WireQuorumInfo/SSESubscriber tool).
+        - Tenant, Realm, Bridge, BridgeHealth, FlowState, TenantDomain
+        - DirectUploadReservation, DirectDownloadReservation, WireQuorumInfo, SSESubscriber
+      correct_as_string:
+        # Same-named fields that are SDL String (NOT Time!) -> string is CORRECT:
+        - "RelayLogEntry.ts, RelayDetailsInput.{startedAt,updatedAt,completedAt} = SDL String"
+        - "BoltSummary.createdAt = model *string (SDL String)"
+    note: >-
+      The 72-site typed-error 400 sweep (raindb-prime 59540cee..d623afa9) changed
+      HTTP status + added extensions.code but NO wire SHAPE; agent-ts
+      src/client/graphql.ts RaindbError already reads extensions/status
+      generically, so no code change was required for it -- recorded, not fixed.
