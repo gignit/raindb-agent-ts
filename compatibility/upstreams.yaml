@@ -21,11 +21,17 @@ upstreams:
         not a prose claim.
       evidence:
         # The complete Time!-scalar surface agent-ts consumes, verified field-by
-        # -field against the SDL model type via coder_go_shapes / coder_go_gql_type:
-        - "model.APIKeyInfo.{createdAt,expiresAt,lastUsedAt} = Time -> number (was string); +name; createdBy String! required"
+        # -field against the SDL model type via coder_go_shapes / coder_go_gql_type.
+        # Peer-reviewed (codex, 129 coder tool calls) for exhaustiveness.
+        - "model.APIKeyInfo.{createdAt,expiresAt,lastUsedAt} = Time -> number (was string); +name (selected + sendable via key_create); createdBy String! required"
         - "model.RevokeAPIKeyResult.revokedAt = Time! -> number (was string)"
-        - "model.KeyEntry.lastModified = Time! -> number (was string); +etag (droplet.ts + index_page.ts)"
+        - "model.KeyEntry.lastModified = Time! -> number (was string); +etag -- fixed in ALL THREE consumers: droplet.ts, index_page.ts, AND relay_queue (relay.ts, missed in the first pass, caught by peer review)"
         - "model.Droplet.ts = Time! -> number (already correct, fca57dd)"
+        - "CacheStats.lastUpdated = Time -> number: CONSUMED (cache.ts:36) and ALREADY correct; listed here for inventory completeness"
+      consumed_but_unselected:
+        - "FormationLatest.snapshotAt (Time): executeSQL's SQLResult.latest bookmark is NOT selected by client/sql.ts, so snapshotAt is never decoded -- a non-breaking missing feature, not a type defect. (followup: adopt SQL freshness fields.)"
+      input_side:
+        - "CreateAPIKeyInput.expiresAt (Time INPUT): agent-ts sends an RFC3339 string; raindb-prime UnmarshalTime accepts both string and number, so this is correct."
       not_consumed:
         # Time!-bearing SDL types agent-ts does NOT decode (no tool consumes them),
         # so they need no change here (verified: no Tenant/Realm/Bridge/FlowState/
