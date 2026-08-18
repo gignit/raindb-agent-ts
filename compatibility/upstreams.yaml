@@ -9,7 +9,7 @@
 # wire type), NOT ops.* (which uses json.RawMessage for its own decode boundary).
 upstreams:
   raindb-prime:
-    reconciled_sha: d623afa9
+    reconciled_sha: 5a7a2177
     validation:
       command: "tests/live/tsdk (node --test) via pytest --profile <p> -m tsdk"
       result: >-
