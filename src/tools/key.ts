@@ -159,6 +159,10 @@ export const key_create: RegisteredTool = {
         description: 'Scope names (e.g., read, write, admin)',
         items: { type: 'string' },
       },
+      name: {
+        type: 'string',
+        description: 'Optional human-readable label for the key (SDL CreateAPIKeyInput.name)',
+      },
       expiresAt: {
         type: 'string',
         description: 'Optional RFC3339 expiry',
@@ -172,6 +176,8 @@ export const key_create: RegisteredTool = {
       return { error: 'scopes required' };
     }
     const input: Record<string, unknown> = { scopes };
+    const name = stringArg(args, 'name');
+    if (name) input['name'] = name;
     const expiresAt = stringArg(args, 'expiresAt');
     if (expiresAt) input['expiresAt'] = expiresAt;
     const data = await executeGraphQL<{ createAPIKey: CreateKeyResult }>(

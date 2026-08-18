@@ -78,7 +78,10 @@ export interface RelayQueueEntry {
   relayId: string;
   formationId: string;
   tokenKey: string;
-  lastModified: string;
+  // Sourced from GraphQL listKeys -> KeyEntry.lastModified, the Time! scalar ->
+  // a Unix-MILLISECONDS NUMBER on the wire (NOT the CLI `droplet keys` display
+  // string). Reconciled against raindb-prime model KeyEntry.
+  lastModified: number;
 }
 
 const READ_RELAY_QUERY = `
@@ -242,14 +245,14 @@ export const relay_queue: RegisteredTool = {
     if (formationFilter) {
       prefix += `${formationFilter}/`;
     }
-    const allEntries: Array<{ key: string; lastModified: string }> = [];
+    const allEntries: Array<{ key: string; lastModified: number }> = [];
     let cursor: string | undefined;
     while (true) {
       const input: Record<string, unknown> = { prefix, pageSize: 1000 };
       if (cursor) input['cursor'] = cursor;
       const data = await executeGraphQL<{
         listKeys: {
-          keys: Array<{ key: string; size: number; lastModified: string }>;
+          keys: Array<{ key: string; size: number; lastModified: number }>;
           nextCursor?: string | null;
           hasMore: boolean;
         };
