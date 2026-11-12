@@ -1,8 +1,8 @@
 // usage.ts -- agent tools for tenant usage events + summary.
 //
 // 2 tenant-scoped tools (admin *_all variants excluded). Both run
-// via the executeSQL GraphQL query against the platform_usage_event
-// formation.
+// via the executeSQL GraphQL query against the platform-usage-event
+// formation, with the same SQL as `raindb-cli usage list/summary`.
 
 import { executeSQL } from '../client/sql.js';
 import { intArg, stringArg } from '../registry/build.js';
@@ -96,15 +96,11 @@ export const usage_list: RegisteredTool = {
       dimension,
       quantity,
       unit,
-      json_extract_string(metadata, '$.model') AS model
+      json_extract_string(capabilityDetails, '$.model') AS model
     FROM ${USAGE_DEDUP}
     WHERE ${where}
     ORDER BY timestamp DESC
     LIMIT ${limit}`;
-    // Canonical hyphenated formationId for the executeSQL prelude
-    // (server-side LoadFormation). SQL body references the DuckDB
-    // view name `entity."platform_usage_event"` (FormationIDSafe,
-    // underscored). Both are correct in their layers.
     const result = await executeSQL(sql, 'platform-usage-event', ctx.creds, undefined, ctx.host);
     const events: UsageEvent[] = result.rows.map((row) => ({
       timestamp: row[0] ?? '',
@@ -151,8 +147,6 @@ export const usage_summary: RegisteredTool = {
     WHERE ${where}
     GROUP BY serviceId, dimension, unit
     ORDER BY serviceId, dimension`;
-    // Canonical hyphenated formationId for the executeSQL prelude;
-    // SQL body uses entity."platform_usage_event" (DuckDB view name).
     const result = await executeSQL(sql, 'platform-usage-event', ctx.creds, undefined, ctx.host);
     const rows: UsageSummaryRow[] = result.rows.map((row) => ({
       service: row[0] ?? '',

@@ -1,6 +1,6 @@
 {
   "name": "@raindb/agent",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "TypeScript LLM agent loop + tool catalog over RainDB's data primitives. Sister package to @raindb/bolt-sdk; embed in a bolt handler or run on Node.",
   "private": true,
   "type": "module",

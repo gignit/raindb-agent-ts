@@ -4,6 +4,21 @@ All notable changes to `@raindb/agent` are documented here. The
 package follows semver post-1.0; pre-1.0 minor bumps may include
 breaking changes (rare, called out explicitly).
 
+## 0.8.2 -- usage_list matches raindb-cli
+
+### Fixed
+
+- `usage_list` read the model from a `metadata` column that the usage
+  table no longer has, so every call failed with "query execution
+  failed". It now runs the same SQL as `raindb-cli usage list`
+  (`capabilityDetails.model`) and returns the same rows.
+
+`llm_usage_report_summary` and `config_get` already send exactly what
+`raindb-cli llm usage-report summary` and `raindb-cli config get` send,
+and currently fail the same way for tenant keys (the report query reads
+the retired `metadata` column; the service-config query requires
+`platform_admin`). They are kept identical to the CLI.
+
 ## 0.8.1 -- tool fixes against the live RainDB API
 
 Every read-only tool was exercised against a live tenant; these were

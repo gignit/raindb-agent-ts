@@ -197,7 +197,7 @@ export const llm_usage_report_summary: RegisteredTool = {
   description:
     "Aggregate THIS TENANT's LLM usage (requests, tokens, platform cost, "
     + 'vendor cost) grouped by date/model/provider/dimension. Reads from '
-    + 'entity.platform_usage_event for the calling tenant -- never '
+    + 'entity."platform-usage-event" for the calling tenant -- never '
     + "cross-tenant. Use this to answer 'what did I spend this month?' or "
     + "'which model is consuming the most tokens?'. Equivalent CLI: "
     + 'raindb-cli llm usage-report summary',
@@ -230,11 +230,8 @@ export const llm_usage_report_summary: RegisteredTool = {
     WHERE ${where}
     GROUP BY date, model, provider, dimension
     ORDER BY date DESC, platform_cost DESC`;
-    // Canonical hyphenated formationId for the executeSQL prelude
-    // (server-side LoadFormation expects canonical). The SQL body
-    // above references `entity."platform_usage_event"` which is the
-    // DuckDB view name (= FormationIDSafe, underscored). Both are
-    // correct in their respective layers.
+    // Same SQL as `raindb-cli llm usage-report summary` (kept identical
+    // on purpose so the two surfaces behave the same).
     const result = await executeSQL(sql, 'platform-usage-event', ctx.creds, undefined, ctx.host);
     const rows: LLMUsageReportRow[] = result.rows.map((row) => ({
       date: row[0] ?? '',

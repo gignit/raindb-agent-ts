@@ -84,13 +84,14 @@ test('usage_list: emits executeSQL with formationId scope', async () => {
   try {
     const r = await usage_list.execute(ctx(), { service: 'llm', limit: 50 });
     const input = recorder[0]!.body.variables['input'] as Record<string, unknown>;
-    // Canonical hyphenated formationId for the executeSQL prelude
-    // (server-side LoadFormation expects canonical). SQL body uses
-    // entity."platform_usage_event" which is the DuckDB view name
-    // (= FormationIDSafe, underscored translation).
     assert.equal(input['formationId'], 'platform-usage-event');
     const sql = String(input['sql']);
     assert.match(sql, /SELECT/);
+    // Same SQL as `raindb-cli usage list`: the table is
+    // entity."platform-usage-event" and the model lives in the
+    // capabilityDetails column (there is no metadata column).
+    assert.match(sql, /FROM entity\."platform-usage-event"/);
+    assert.match(sql, /json_extract_string\(capabilityDetails, '\$\.model'\) AS model/);
     assert.match(sql, /serviceId = 'llm'/);
     assert.match(sql, /LIMIT 50/);
     const events = r as Array<{ service: string; model: string }>;
