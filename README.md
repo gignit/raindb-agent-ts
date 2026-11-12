@@ -57,7 +57,7 @@ substrate calls through native bindings) and on Node (host wraps
 global `fetch` and openai-node).
 
 The package is **opinionated about the agent loop, not the model**.
-You can use OpenAI directly, raindb-api's `/v1/chat/completions`
+You can use OpenAI directly, the RainDB API's `/v1/chat/completions`
 proxy (which routes through the configured LLM provider), or any
 OpenAI-spec-compatible endpoint.
 
@@ -110,7 +110,7 @@ export async function onHttpRequest(
 }
 ```
 
-The agent loop resolves the chat model automatically via raindb's
+The agent loop resolves the chat model automatically via RainDB's
 `llmRegistry` (cached 5min per API key). Override with `model:
 'gpt-5'` to pin a specific model.
 
@@ -124,7 +124,7 @@ below.
 ## Quick start as a Node CLI / library
 
 The package works equally well outside a bolt. Useful when you're
-building an agentic CLI that talks to a remote raindb realm:
+building an agentic CLI that talks to a remote RainDB realm:
 
 ```typescript
 import { runAgent, tenantTools, makeNodeHost } from '@raindb/agent';
@@ -414,7 +414,7 @@ gets chosen:
 1. **Caller pins it**: `runAgent({ model: 'gpt-5' })`. Wins.
 2. **Caller leaves it unset**: the loop calls
    `resolveDefaultChatModel(ctx.creds, ctx.host)` which queries
-   raindb's `llmRegistry` GraphQL endpoint and returns the model id
+   RainDB's `llmRegistry` GraphQL endpoint and returns the model id
    the platform has registered as the `'chat'` default. Cached per
    `creds.apiKey` for 5 minutes (hot path = one round trip per cache
    TTL). If the registry has no model with chat capability,
@@ -452,28 +452,23 @@ host.chatCompletion(req)
 ctx.fetch( <restBase>/v1/chat/completions , req )
    |
    v
-api-ALB
-   |
-   v
-raindb-api's /v1/chat/completions endpoint
+the RainDB API's /v1/chat/completions endpoint
    |
    v
 configured LLM provider (OpenAI, Anthropic, Bedrock, ...)
 ```
 
 `restBase` is derived from `ctx.creds.endpoint` (typically
-`https://api.<env>.raindb.gignit.com`). raindb-api is the openai-spec
+`https://api.raindb.io`). The RainDB API is the openai-spec
 proxy that fronts the configured LLM provider -- this means your bolt
 DOES NOT need an OpenAI API key. The bolt holds a RainDB API key
-(scoped to the bolt's tenant) and raindb-api transparently forwards
+(scoped to the bolt's tenant) and the RainDB API transparently forwards
 to whichever LLM provider the realm has configured.
 
-The api-ALB's idle timeout on the platform infrastructure MUST be
-long enough for the worst-case LLM round-trip. The AWS ALB default
-is 60s; the platform ships its infrastructure with a 300s idle
-timeout to cover RAG-augmented chats. If you see 504s at exactly 60s
-on a deployed env, the operator hasn't bumped the api-ALB on that
-env -- contact your platform operator.
+The platform's idle timeout MUST be long enough for the worst-case
+LLM round-trip. RainDB ships a 300s idle timeout to cover
+RAG-augmented chats. If you see 504s at exactly 60s on a deployed
+env, contact your platform operator.
 
 ---
 
@@ -594,9 +589,9 @@ Each event arrives as a separate network packet. Browser receives
 the typing indicator instantly, sees each tool announcement as it
 happens, and renders the final reply progressively.
 
-`fdn-app/bolt/server/routes/chat.ts` is the canonical
-worked example with RAG context, multi-tool agent loop, and full SSE
-streaming -- ~700 lines covering the entire production pattern.
+Your bolt's chat route handler is the canonical place for this
+pattern: RAG context, a multi-tool agent loop, and full SSE
+streaming together cover the entire production pattern.
 
 ---
 
@@ -614,7 +609,7 @@ import { auth } from '@raindb/bolt-sdk';
 const callerRole: 'read' | 'write' | 'admin' = (() => {
   if (auth.isAnonymous) return 'read';
   // Bolt-specific logic: look up the user's role from your own
-  // tenancy model (e.g. fdn-app's project-membership table)
+  // tenancy model (e.g. your app's project-membership table)
   const role = lookupUserRoleForProject(auth.subject, projectId);
   return role;
 })();
@@ -699,21 +694,21 @@ When the user asks about document content:
   tools: [
     vector_search,
     get_chunk_range,        // custom tool
-    fdn_resolve_document_path,
-    fdn_get_document_text,
+    resolve_document_path,
+    get_document_text,
   ],
 });
 ```
 
-The `foundation` pack defines the canonical formations
-(`fdn-documents`, `fdn-chunks`, `fdn-embeddings`) and the `fdn-app`
-reference bolt is the production-grade RAG implementation.
+A RAG bolt defines its own canonical formations
+(e.g. `documents`, `chunks`, `embeddings`) driving the
+production-grade RAG implementation.
 
 ---
 
 ## Compatibility + versioning
 
-| `@raindb/agent` | `@raindb/bolt-sdk` (in-bolt) | raindb-api version |
+| `@raindb/agent` | `@raindb/bolt-sdk` (in-bolt) | RainDB API version |
 |---|---|---|
 | 0.7.x | 0.1.x | 1.0.x |
 | 0.8.x (current) | 0.4.x | 1.0.x + mintScopedGrant + ctx.auth |
@@ -729,28 +724,22 @@ openai-node major it ships with.
 - [`@raindb/bolt-sdk`](../raindb-bolt-sdk-ts/README.md) -- the bolt
   runtime bindings. Read it first if you're writing bolts; the SSE
   + IAM patterns + marketplace pack inventory are documented there.
-- `~/src/raindb-base/README.md` -- the marketplace authoring source.
-  Read this when you need to understand how packs are published,
-  installed, or version-bumped.
-- `~/src/raindb-base/vendors/raindb/packs/guide-patterns/` -- the
-  canonical RainDB design-patterns guide. Read first when designing
-  a new formation that an agent tool will read or write.
-- `~/src/raindb-base/vendors/raindb/packs/foundation/README.md` --
-  the `foundation` (FDN) pack's guide. This is the production RAG
-  pack -- `fdn-documents`, `fdn-chunks`, `fdn-embeddings`, plus
+- The RainDB marketplace -- browse it to understand how packs are
+  published, installed, or version-bumped.
+- The canonical RainDB design-patterns guide (published as a
+  marketplace pack). Read first when designing a new formation that
+  an agent tool will read or write.
+- The RAG pack guide (published as a marketplace pack). This is the
+  production RAG pack -- `documents`, `chunks`, `embeddings`, plus
   projects / folders / chat sessions / chat messages / coworkers /
   memberships. Install + read this when your agent does RAG over
   user-uploaded documents.
-- `~/src/raindb-base/vendors/raindb/packs/social/CHAT_PATTERNS.md`
-  -- canonical chat pattern: AI-agent participants, SSE-streamed LLM
+- The chat-patterns guide (published as a marketplace pack) --
+  canonical chat pattern: AI-agent participants, SSE-streamed LLM
   responses, asc/desc/poll cursor pattern with tuple-match dedup.
-- Reference bolts (public starter repos):
-  - `github.com/gignit/joshua-vs-wopr` -- minimal LLM bolt: chess +
-    chat, SSE streaming, ~700 LOC. Best read first.
-  - `github.com/gignit/super-calculator` -- streaming agent UI +
-    multi-tool LLM loop.
-  - `github.com/gignit/fdn-app` -- production RAG: documents,
-    multi-project, multi-user, agent + tool calls, full SPA.
+- A production RAG application built on RainDB -- documents,
+  multi-project, multi-user, agent + tool calls, full SPA -- is the
+  reference for the complete end-to-end pattern.
 
 ---
 

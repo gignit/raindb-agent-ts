@@ -1,19 +1,18 @@
 // digest.ts -- agent tools for digest-pipeline status.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_digest.go::tenantDigestTools.
 // 2 tools, both read-only:
 //
 //   digest_list  -- per-entity status with stage breakdown
 //   digest_show  -- one entity's full digest detail
 //
-// The Go op SynthesizeActionStatus walks:
+// Status synthesis walks:
 //   1. ListDroplets to get entity IDs (via formation scopeKey)
-//   2. RelayListForEntity per id to find root relays
-//   3. RelayTree on the latest root to get the full sub-relay tree
+//   2. list root relays per id
+//   3. read the relay tree on the latest root to get the full sub-relay tree
 //   4. Stage-walker projection from sub-relay status to ActionStage
 //
-// The TS port mirrors this verbatim but delegates relay reads to
-// the GraphQL surface used by relay_tree / relay_entity.
+// Relay reads are delegated to the GraphQL surface used by
+// relay_tree / relay_entity.
 
 import { executeGraphQL } from '../client/graphql.js';
 import { stringArg } from '../registry/build.js';
@@ -21,7 +20,7 @@ import type { RegisteredTool } from '../registry/types.js';
 import type { RelayResult } from './relay.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror internal/ops/digest.go + action_status.go)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface ActionStage {
@@ -119,8 +118,7 @@ async function resolveScopeKey(
   creds: { apiKey?: string; endpoint?: string },
   host: import('../host/types.js').AgentHost | undefined,
 ): Promise<string> {
-  // Mirrors ops/digest.go::resolveScopeKey -- best-effort describe;
-  // fall back to "id" on any failure.
+  // Best-effort describe; fall back to "id" on any failure.
   try {
     const data = await executeGraphQL<{
       describeFormation: { scopeKey?: string } | null;
@@ -137,7 +135,6 @@ function extractEntityID(
   payload: Record<string, unknown> | null | undefined,
   scopeKey: string,
 ): string {
-  // Mirrors ops/digest.go::extractEntityID.
   if (!payload || !scopeKey) return '';
   const v = payload[scopeKey];
   return typeof v === 'string' ? v : '';
@@ -148,9 +145,8 @@ async function listEntityIds(
   creds: { apiKey?: string; endpoint?: string },
   host: import('../host/types.js').AgentHost | undefined,
 ): Promise<string[]> {
-  // Mirrors ops/digest.go::DigestList lines 93-108: ListDroplets
-  // through 200-page-size, project each payload to its scopeKey,
-  // dedupe.
+  // ListDroplets through 200-page-size, project each payload to its
+  // scopeKey, dedupe.
   const scopeKey = await resolveScopeKey(formation, creds, host);
   const data = await executeGraphQL<{
     listDroplets: {
@@ -180,9 +176,8 @@ async function listRootRelayIds(
   creds: { apiKey?: string; endpoint?: string },
   host: import('../host/types.js').AgentHost | undefined,
 ): Promise<string[]> {
-  // Mirrors ops/relay.go::RelayListForEntity -- list keys under
-  // relays/<formation>/<entityId>/, project unique relayIds (the
-  // segment after entityId).
+  // List keys under relays/<formation>/<entityId>/, project unique
+  // relayIds (the segment after entityId).
   const prefix = `relays/${formation}/${entityId}/`;
   const seen = new Set<string>();
   const ids: string[] = [];
@@ -247,7 +242,6 @@ interface ActionContext {
 }
 
 function readActionContext(tree: RelayResult | null): ActionContext {
-  // Mirrors ops/action_status.go::readActionContext.
   if (!tree || !tree.details) {
     return { actionFormation: '', filename: '', rootStartedAt: '' };
   }
@@ -280,12 +274,9 @@ function readActionContext(tree: RelayResult | null): ActionContext {
 }
 
 /**
- * Generic stage walker. The Go side has a registry of action-type
- * specific walkers (LookupActionWalker), but the default
- * `genericActionWalker` projects each immediate sub-relay as one
- * stage with the relay's status + details. We mirror the generic
- * path; action-type specifics can land later if needed for fdn
- * tooling.
+ * Generic stage walker. Projects each immediate sub-relay as one
+ * stage with the relay's status + details. Action-type specifics can
+ * land later if needed for host tooling.
  */
 function walkStages(tree: RelayResult): ActionStage[] {
   if (!tree.subRelays) return [];
@@ -326,7 +317,6 @@ function walkStages(tree: RelayResult): ActionStage[] {
 }
 
 function computeOverall(rootStatus: string, stages: ActionStage[]): string {
-  // Mirrors ops/action_status.go::computeOverall (simplified).
   // If any stage failed -> failed; if root is running and any
   // stage is running -> running; if all stages complete + root
   // complete -> complete. Default to root status.
@@ -337,8 +327,7 @@ function computeOverall(rootStatus: string, stages: ActionStage[]): string {
 }
 
 function computeDuration(rootStartedAt: string, stages: ActionStage[]): number {
-  // Mirrors ops/action_status.go::computeDuration: from root start
-  // to latest completedAt across stages.
+  // From root start to latest completedAt across stages.
   if (rootStartedAt === '') return 0;
   const start = Date.parse(rootStartedAt);
   if (Number.isNaN(start)) return 0;
@@ -394,8 +383,7 @@ async function synthesizeStatus(
 }
 
 // ---------------------------------------------------------------------------
-// digest_list -- Go ref: tools_digest.go (lines 30-55)
-//   + ops/digest.go::DigestList (lines 69-166)
+// digest_list
 // ---------------------------------------------------------------------------
 
 export const digest_list: RegisteredTool = {
@@ -429,8 +417,8 @@ export const digest_list: RegisteredTool = {
     if (!formation) return { error: 'formation required' };
     const ids = await listEntityIds(formation, ctx.creds, ctx.host);
     if (ids.length === 0) return [] as DigestEntityStatus[];
-    // Synthesize per id. Concurrency cap mirrors the Go side's
-    // default of 8 to keep S3 + raindb-api parallelism reasonable.
+    // Synthesize per id. Concurrency cap defaults to 8 to keep
+    // S3 + the RainDB API parallelism reasonable.
     const concurrency = 8;
     const results: DigestEntityStatus[] = new Array(ids.length);
     let next = 0;
@@ -454,7 +442,7 @@ export const digest_list: RegisteredTool = {
     const workers: Array<Promise<void>> = [];
     for (let w = 0; w < concurrency; w += 1) workers.push(worker());
     await Promise.all(workers);
-    // Sort by filename then entityId (mirrors Go sort).
+    // Sort by filename then entityId.
     results.sort((a, b) => {
       const fa = a.filename ?? '';
       const fb = b.filename ?? '';
@@ -466,9 +454,8 @@ export const digest_list: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// digest_show -- Go ref: tools_digest.go (lines 56-87)
-// Mirrors DigestList with OnlyEntityID set, returning the single
-// row.
+// digest_show
+// Synthesizes the single entity row.
 // ---------------------------------------------------------------------------
 
 export const digest_show: RegisteredTool = {

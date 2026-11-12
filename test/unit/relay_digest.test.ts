@@ -248,7 +248,7 @@ test('relay_tree: emits readRelay with tree=true', async () => {
 // relay_queue / relay_entity (listKeys-driven)
 // ---------------------------------------------------------------------------
 
-test('relay_queue: walks listKeys against relays/queue/<queue>/ prefix', async () => {
+test('relay_queue: walks listKeys against indexes/<queue>/by-formation/ prefix', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = mockFetchSequence(
@@ -257,8 +257,8 @@ test('relay_queue: walks listKeys against relays/queue/<queue>/ prefix', async (
         data: {
           listKeys: {
             keys: [
-              { key: 'relays/queue/digest-queue/fdn_documents/r1.json', size: 1, lastModified: '2026-05-09T10:00:00Z' },
-              { key: 'relays/queue/digest-queue/fdn_documents/r2.json', size: 1, lastModified: '2026-05-09T10:01:00Z' },
+              { key: 'indexes/digest-queue/by-formation/fdn_documents/r1.json', size: 1, lastModified: 1746784800000 },
+              { key: 'indexes/digest-queue/by-formation/fdn_documents/r2.json', size: 1, lastModified: 1746784860000 },
             ],
             nextCursor: null,
             hasMore: false,
@@ -275,7 +275,7 @@ test('relay_queue: walks listKeys against relays/queue/<queue>/ prefix', async (
       formationFilter: 'fdn_documents',
     });
     const input = recorder[0]!.body.variables['input'] as Record<string, unknown>;
-    assert.equal(input['prefix'], 'relays/queue/digest-queue/fdn_documents/');
+    assert.equal(input['prefix'], 'indexes/digest-queue/by-formation/fdn_documents/');
     const entries = r as Array<{ relayId: string; formationId: string }>;
     assert.equal(entries.length, 2);
     assert.equal(entries[0]!.relayId, 'r1');
@@ -318,7 +318,7 @@ test('relay_entity: dedupes relayIds across listKeys pages', async () => {
   }
 });
 
-test('relay tools: metadata matches Go reference', () => {
+test('relay tools: metadata matches the tenant tool spec', () => {
   for (const t of [
     relay_queue,
     relay_status,
@@ -528,7 +528,7 @@ test('digest_show: no-action-found when no roots exist', async () => {
   }
 });
 
-test('digest tools: metadata matches Go reference', () => {
+test('digest tools: metadata matches the tenant tool spec', () => {
   assert.equal(digest_list.minRole, 'read');
   assert.ok(!digest_list.modifiesResource);
   assert.deepEqual(digest_list.parameters.required, ['formation']);

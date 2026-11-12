@@ -1,7 +1,6 @@
 // llm.ts -- agent tools for LLM provider/model registry +
 // per-tenant usage reporting.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_llm.go::tenantLLMTools.
 // 3 tenant-scoped tools (admin reconcile/vendor variants excluded).
 //
 //   llm_provider_list -- list platform-llm-provider entries
@@ -14,21 +13,19 @@ import { intArg } from '../registry/build.js';
 import type { RegisteredTool } from '../registry/types.js';
 
 // Canonical hyphenated formation ids -- the public agent-facing contract.
-// raindb-api stores these formations at
+// The RainDB API stores these formations at
 //   indexes/platform-llm-provider/by-id/...
 //   indexes/platform-llm-model/by-id/...
 // The DuckDB-internal underscored form ("platform_llm_model") is a
-// server-side translation handled by formation.FormationIDSafe; clients
-// must NEVER send the underscored form -- a listKeys against
-// `indexes/platform_llm_model/by-id/` returns zero results because
-// nothing is stored there.
+// server-side translation; clients must NEVER send the underscored
+// form -- a listKeys against `indexes/platform_llm_model/by-id/`
+// returns zero results because nothing is stored there.
 const PROVIDER_FORMATION = 'platform-llm-provider';
 const MODEL_FORMATION = 'platform-llm-model';
 
 // Both list ops walk the by-id index and project each pointer to
 // the underlying droplet. We use listKeys on the by-id prefix +
-// readLatest on each match, mirroring ops/llm_registry.go::
-// LLMProviderList + LLMModelList exactly.
+// readLatest on each match.
 
 const LIST_KEYS_QUERY = `
   query ListKeys($input: ListKeysInput!) {
@@ -65,11 +62,10 @@ interface ReadLatestPayloadResponse {
 /**
  * List all keys under `prefix` (paged), then derive the entity id
  * from each key + read the latest droplet through the by-id-latest
- * index. Returns the raw payloads (typed minimally; the Go side
- * unmarshals into ProviderConfig / Model structs but keeping it
+ * index. Returns the raw payloads (typed minimally; keeping it
  * loose here lets the model see the full shape).
  *
- * Mirrors the ops/llm_registry.go pattern verbatim:
+ * Pattern:
  *   keys = ListAllKeys(prefix=indexes/<formation>/by-id/)
  *   for each key matching .../by-id/<entityId>/latest.json:
  *     droplet = ReadLatest(formation, "by-id-latest", entityId)
@@ -96,9 +92,8 @@ async function listFormationEntities(
     cursor = data.listKeys.nextCursor;
   }
 
-  // Project keys -> entity ids. Mirror Go llm_registry.go:34-39
-  // (provider) and :60-76 (model -- which supports nested ids
-  // like 'fdn/sonnet' so it joins parts after by-id).
+  // Project keys -> entity ids. Model ids may be nested (e.g.
+  // 'fdn/sonnet'), so join the parts after by-id.
   const ids = new Set<string>();
   for (const key of allKeys) {
     const parts = key.split('/');
@@ -126,8 +121,8 @@ async function listFormationEntities(
       const payload = data.readLatest?.payload;
       if (payload) out.push(payload);
     } catch {
-      // Mirror Go behavior: skip individual read failures rather
-      // than aborting the whole list (lines 41-46 + 78-83).
+      // Skip individual read failures rather than aborting the
+      // whole list.
       continue;
     }
   }
@@ -135,8 +130,7 @@ async function listFormationEntities(
 }
 
 // ---------------------------------------------------------------------------
-// llm_provider_list -- Go ref: tools_llm.go (lines 44-55)
-//   + ops/llm_registry.go::LLMProviderList (lines 28-51)
+// llm_provider_list
 // ---------------------------------------------------------------------------
 
 export const llm_provider_list: RegisteredTool = {
@@ -153,8 +147,7 @@ export const llm_provider_list: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// llm_model_list -- Go ref: tools_llm.go (lines 56-67)
-//   + ops/llm_registry.go::LLMModelList (lines 54-88)
+// llm_model_list
 // ---------------------------------------------------------------------------
 
 export const llm_model_list: RegisteredTool = {
@@ -171,13 +164,11 @@ export const llm_model_list: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// llm_usage_report_summary -- Go ref: tools_llm.go (lines 68-87)
-//   + ops/host.go::LLMUsageReportSummary (lines 193-239)
+// llm_usage_report_summary
 //
-// The Go op builds a SQL string (rolling up usage events grouped by
+// Builds a SQL string (rolling up usage events grouped by
 // date/model/provider/dimension) and runs it through the same
-// executeSQL surface usage_list uses. We mirror the SQL string
-// verbatim.
+// executeSQL surface usage_list uses.
 // ---------------------------------------------------------------------------
 
 export interface LLMUsageReportRow {

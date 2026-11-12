@@ -1,37 +1,19 @@
 // marketplace.ts -- agent tools for the RainDB marketplace
 // (vendor/pack browsing).
 //
-// Phase 6 of docs/BRIDGE_REFACTOR_PLAN.md in raindb-phoenix-oc:
-// marketplace is a PARTNER of the bridge, not a passenger. It
-// lives on raindb-app as an anonymous-readable REST API. These
-// tools fetch from that REST surface instead of trying to
-// listDroplets the platform tenant via per-tenant GraphQL
-// credentials -- which fails because the marketplace formations
-// aren't bridged to per-tenant tenants.
+// The marketplace is exposed as a REST API on the RainDB
+// marketplace service. These tools fetch from that REST surface
+// via a plain HTTP GET, with filters applied server-side.
 //
-// Decision matrix walk (PROJECT_REQUIREMENTS.md section 1.2):
-//
-//   Rule 1 (numbered rules): A.2 "no fallbacks" -- marketplaceBaseUrl
-//   is required when calling marketplace tools; absence is an
-//   explicit error.
-//
-//   Rule 2 (phoenix pattern): the marketplace REST API on raindb-app
-//   is the existing primitive (server/index.js routes
-//   /api/marketplace/*). This is what raindb-app's web UI already
-//   consumes; we mirror that pattern.
-//
-//   Rule 5 (default to simpler): HTTP fetch with no auth is
-//   structurally simpler than threading per-tenant API keys +
-//   ListDroplets + projection mapping. Same payload shape; one
-//   round-trip per call.
-//
-// Mirrors raindb-phoenix-oc/internal/ai/tools_marketplace.go for
-// tool names + parameters so the model sees a substitutable
-// surface across the Go (raindb-cli) and TS portals.
+// marketplaceBaseUrl is required when calling marketplace tools;
+// absence is an explicit error (no fallbacks). HTTP fetch is
+// structurally simpler than threading per-tenant API keys +
+// listDroplets + projection mapping; same payload shape, one
+// round-trip per call.
 //
 // pack_install is intentionally NOT ported to the shared package:
 // it writes to the operator's filesystem, which only the CLI host
-// has. Portal hosts can implement an equivalent that publishes
+// has. Node consumers can implement an equivalent that publishes
 // the pack's formations to the user's project via Genesis seeds
 // (a substantial product feature scoped per-host).
 
@@ -43,8 +25,7 @@ import {
 import type { RegisteredTool, ToolContext } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror raindb-app's /api/marketplace/* response shapes,
-// which are byte-identical to raindb-phoenix-oc/internal/ops/marketplace.go's
+// Wire shapes (the /api/marketplace/* response shapes:
 // Pack / PackSummary / VendorSummary projections).
 // ---------------------------------------------------------------------------
 
@@ -136,8 +117,8 @@ function resolveMarketplaceBaseUrl(ctx: ToolContext): string | { error: string }
     return {
       error:
         'marketplaceBaseUrl required on ToolContext. The shared package '
-        + 'does not read process.env directly; the host (fdn-app, raindb-app, '
-        + 'or other) must populate it. Typically: ctx.marketplaceBaseUrl = '
+        + 'does not read process.env directly; the host application must '
+        + 'populate it. Typically: ctx.marketplaceBaseUrl = '
         + 'process.env.RAINDB_API_URL (default http://localhost:8080).',
     };
   }
@@ -145,12 +126,11 @@ function resolveMarketplaceBaseUrl(ctx: ToolContext): string | { error: string }
 }
 
 /**
- * Fetch a JSON document from the marketplace REST API on raindb-api.
- * Sends `X-API-Key: <ctx.creds.apiKey>` because raindb-api's
- * authMiddleware gates `/api/marketplace/*` post-S.1 (commit 2ee476a
- * on raindb-phoenix-oc). The caller identity is used for authn /
- * observability only; the actual data source is the marketplace
- * tenant resolved server-side via platform_marketplace_credential.
+ * Fetch a JSON document from the marketplace REST API on the RainDB
+ * API. Sends `X-API-Key: <ctx.creds.apiKey>` because the API gates
+ * `/api/marketplace/*`. The caller identity is used for authn /
+ * observability only; the actual data source is resolved
+ * server-side.
  *
  * Throws a `RaindbError` on transport failure or non-2xx response so
  * the agent loop can surface a typed error to the model.
@@ -233,12 +213,11 @@ export const pack_list: RegisteredTool = {
     const base = resolveMarketplaceBaseUrl(ctx);
     if (typeof base !== 'string') return base;
 
-    // Build query string. raindb-app's /api/marketplace/packs accepts
-    // vendor, category, usageIntent, search as query params and applies
-    // the filtering server-side -- we forward whatever the LLM passed,
-    // server is the canonical filter implementation. (Mirrors the
-    // "marketplace REST is the partner" Phase 6 decision: don't
-    // re-implement filter semantics client-side; defer to server.)
+    // Build query string. /api/marketplace/packs accepts vendor,
+    // category, usageIntent, search as query params and applies the
+    // filtering server-side -- we forward whatever the LLM passed;
+    // the server is the canonical filter implementation. Don't
+    // re-implement filter semantics client-side; defer to server.
     const qs = new URLSearchParams();
     const vendor = stringArg(args, 'vendor');
     if (vendor) qs.set('vendor', vendor);
@@ -444,10 +423,8 @@ export const vendor_info: RegisteredTool = {
 
 /**
  * Per-domain catalog. pack_install is intentionally NOT included --
- * see docs/M2-CHECKLIST.md section J.5 for the deferral rationale
- * (filesystem-bound CLI primitive, portal hosts need a different
- * semantic; Phase 5 of docs/BRIDGE_REFACTOR_PLAN.md is the
- * Genesis-seed-based replacement).
+ * it is a filesystem-bound CLI primitive and Node consumers need a
+ * different semantic (a Genesis-seed-based replacement).
  */
 export const marketplaceTools: RegisteredTool[] = [
   pack_list,

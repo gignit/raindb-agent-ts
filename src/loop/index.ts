@@ -1,8 +1,7 @@
 // loop/index.ts -- the agent loop. Runs over an AgentHost's
 // chatCompletion surface.
 //
-// Extracted from fdn-app/server/src/services/agentLoop.ts. The
-// generic loop here drops fdn-app-specific machinery (side-effect
+// The generic loop here drops host-specific machinery (side-effect
 // callbacks, structured-result allow-list, session-title events).
 // Hosts that need richer events subscribe via `onEvent` and
 // translate to their own UI/SSE shape.
@@ -23,7 +22,7 @@
 // global fetch, or any provider's API shape. ctx.host's
 // chatCompletion call drives every LLM round-trip. Node consumers
 // inject makeNodeHost(creds) (which wraps openai-node); Lightning
-// bolt consumers inject a goja-side host that calls ctx.fetch.
+// bolt consumers inject a bolt-sandbox host that calls ctx.fetch.
 
 import type {
   ChatCompletionMessageParam,
@@ -47,9 +46,9 @@ import {
 import { resolveDefaultChatModel } from '../client/raindbAi.js';
 
 /**
- * Hard cap so a misconfigured platform_config_llm or a runaway
- * agent can't burn unbounded LLM cost. Mirrors phoenix's
- * pkg/llm.MaxIterationsHardCap.
+ * Hard cap so a misconfigured model config or a runaway agent
+ * can't burn unbounded LLM cost. Mirrors the RainDB platform's
+ * iteration hard cap.
  */
 const MAX_ITERATIONS_HARD_CAP = 2000;
 
@@ -77,7 +76,7 @@ export interface RunAgentOptions {
   tools?: RegisteredTool[];
   /**
    * Caller-supplied chat model id. When unset, the loop resolves
-   * the platform default via raindb's llmRegistry (cached 5min).
+   * the platform default via the RainDB API (cached 5min).
    */
   model?: string;
   /**

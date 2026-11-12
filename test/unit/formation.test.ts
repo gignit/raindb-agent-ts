@@ -227,7 +227,7 @@ test('formation_publish: omitted schema becomes empty object (Go side requires J
   }
 });
 
-test('formation_*: tool metadata matches Go reference', () => {
+test('formation_*: tool metadata matches the tenant tool spec', () => {
   assert.equal(formation_list.name, 'formation_list');
   assert.equal(formation_list.minRole, 'read');
   assert.ok(!formation_list.modifiesResource);

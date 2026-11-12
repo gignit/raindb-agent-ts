@@ -4,12 +4,12 @@
 // The package decouples its dependency on Node primitives (global
 // fetch, openai-node) by funneling every outbound call through an
 // AgentHost. Node consumers pass `makeNodeHost(creds)`. Non-Node
-// consumers (Lightning bolts running in goja) inject their own host
+// consumers (Lightning bolts) inject their own host
 // that wraps `ctx.fetch` and an LLM provider call.
 //
 // Two known consumers today:
-//   - fdn-app   (Node BFF, uses makeNodeHost)
-//   - the Lightning bolt port (goja sandbox, host implemented in Go)
+//   - Node consumers (Node BFF, uses makeNodeHost)
+//   - the Lightning bolt sandbox (host implemented in Go)
 //
 // The AgentHost contract is the package's stable extension point.
 // Adding a method is a breaking change; consumers must implement
@@ -32,8 +32,8 @@
  *   - `fetch`: HTTP transport for GraphQL + marketplace REST.
  *     Returns a host-agnostic `HostResponse` with `.text()` and
  *     `.json()` methods so the call shape is identical across Node
- *     (where it wraps global fetch) and goja (where it wraps
- *     `ctx.fetch`).
+ *     (where it wraps global fetch) and the bolt sandbox (where it
+ *     wraps `ctx.fetch`).
  *
  *   - `chatCompletion`: invoke an LLM provider's chat-completions
  *     endpoint. The Node host wraps openai-node; the bolt host
@@ -61,7 +61,7 @@ export interface AgentHost {
    * mirrors OpenAI's `ChatCompletion` envelope.
    *
    * Implementations are free to route to OpenAI directly, to a
-   * raindb-api proxy, or to a non-OpenAI provider that translates
+   * RainDB API proxy, or to a non-OpenAI provider that translates
    * the request shape internally.
    */
   chatCompletion(req: ChatCompletionRequest): Promise<ChatCompletionResponse>;
@@ -81,7 +81,7 @@ export interface AgentHost {
  * Fetch init shape. Subset of the standard `RequestInit` covering
  * what the package's outbound calls need. Hosts that wrap a
  * standard fetch translate this directly; the bolt host translates
- * to its goja-side shape.
+ * to its bolt-sandbox shape.
  */
 export interface HostFetchInit {
   method?: string;
@@ -95,7 +95,7 @@ export interface HostFetchInit {
  * the body identically.
  *
  * `text()` and `.json()` are functions (not getters) for parity
- * with `globalThis.Response` AND the bolt-side goja binding which
+ * with `globalThis.Response` AND the bolt-side sandbox binding which
  * also exposes them as functions.
  */
 export interface HostResponse {
@@ -107,7 +107,7 @@ export interface HostResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Chat completion types -- internal raindb-internal shapes that
+// Chat completion types -- internal shapes that
 // mirror openai-spec wire format. snake_case is intentional; do not
 // camelCase these without updating every host implementation and
 // every consumer that builds request bodies for direct LLM calls.
@@ -120,7 +120,7 @@ export interface HostResponse {
  * can be wired without a translation layer at every call site.
  */
 export interface ChatCompletionRequest {
-  /** Model id (e.g. "fdn/sonnet"). */
+  /** Model id (e.g. "raindb/sonnet"). */
   model: string;
   /** Conversation. System message first, then user/assistant/tool. */
   messages: ChatCompletionMessageParam[];

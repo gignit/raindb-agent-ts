@@ -1,13 +1,11 @@
 // periscope.ts -- agent tools for periscope (SQL-plane) observability.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_periscope.go::tenantPeriscopeTools.
 // 17 tools, all read-only. Periscope is the parquet/iceberg/duckdb
 // SQL plane; these tools surface tier state, snapshots, pools,
 // sentinels, scheduled events, and audit/reconcile reports.
 //
-// Every tool wraps one GraphQL query that mirrors the Go side
-// verbatim (selection set + variable shape from
-// internal/ops/periscope.go).
+// Every tool wraps one GraphQL query with a stable selection set +
+// variable shape.
 
 import { executeGraphQL } from '../client/graphql.js';
 import {
@@ -18,12 +16,12 @@ import {
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// GraphQL query strings (verbatim from internal/ops/periscope.go)
+// GraphQL query strings.
 // ---------------------------------------------------------------------------
 
 const PERISCOPE_STATUS_QUERY = `
-  query PeriscopeStatus {
-    periscopeStatus {
+  query PeriscopeStatus($pending: Boolean) {
+    periscopeStatus(pending: $pending) {
       tenantId
       rows {
         formationId
@@ -33,6 +31,13 @@ const PERISCOPE_STATUS_QUERY = `
           name state cursor lastCommitMs snapshotCount poolCount
           activePoolCount pendingPoolCount
         }
+        behind
+        dropletsAhead
+        dropletsAheadHasMore
+        inflight
+        snapshotCursor
+        currentCursor
+        sourceIndexPrefix
       }
       healthSummary
     }
@@ -216,22 +221,40 @@ const PERISCOPE_RECONCILE_QUERY = `
 // modifiesResource=false. The pattern is uniform: pull args, validate,
 // call executeGraphQL, return the projected result field. Result
 // shapes are typed loosely (Record<string, unknown> at the top level)
-// so callers consume them as JSON; the Go side's typed structs are
-// just projection helpers and not part of the wire contract.
+// so callers consume them as JSON; the typed structs are just
+// projection helpers and not part of the wire contract.
 // ---------------------------------------------------------------------------
 
 export const periscope_status: RegisteredTool = {
   name: 'periscope_status',
   description:
-    "Tier-level state for the current tenant's periscope formations. "
-    + 'Values: OK, PENDING, IDLE, STALE, FAILED. '
-    + 'Equivalent CLI: raindb-cli periscope status',
+    "Tier-level state for the current tenant's periscope formations "
+    + '(tier State values: OK, PENDING, IDLE, STALE, FAILED). Pass '
+    + 'pending=true to ALSO get, per formation, `behind` (droplets '
+    + 'written but not yet pooled into the queryable SQL view -- data '
+    + 'not fully queryable yet) and `dropletsAhead` (count of those '
+    + 'in-flight droplets; a floor when dropletsAheadHasMore is true). '
+    + 'Use to answer "is my data fully queryable / how far behind is '
+    + 'it?". pending adds a bounded key walk per formation, so omit it '
+    + 'for the cheap overview. Equivalent CLI: raindb-cli periscope '
+    + 'status --pending',
   minRole: 'read',
-  parameters: { type: 'object' },
-  async execute(ctx) {
+  parameters: {
+    type: 'object',
+    properties: {
+      pending: {
+        type: 'boolean',
+        description:
+          'Also compute per-formation behind + dropletsAhead (in-flight) '
+          + 'counts (adds a bounded key walk per formation).',
+      },
+    },
+  },
+  async execute(ctx, args) {
+    const pending = boolArg(args, 'pending', false);
     const data = await executeGraphQL<{ periscopeStatus: unknown }>(
       PERISCOPE_STATUS_QUERY,
-      {},
+      pending ? { pending: true } : {},
       ctx.creds,
       ctx.host,
     );
@@ -728,8 +751,7 @@ export const periscope_droplet_residual: RegisteredTool = {
 };
 
 /**
- * Per-domain catalog. Order mirrors the Go reference's tool order
- * in tools_periscope.go::tenantPeriscopeTools.
+ * Per-domain catalog. Tool order is stable across the SDK surface.
  */
 export const periscopeTools: RegisteredTool[] = [
   periscope_status,

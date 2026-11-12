@@ -2,7 +2,7 @@
 //
 // Verifies:
 //   1. The tool emits the expected WriteDroplet GraphQL mutation +
-//      input shape (matches raindb-phoenix-oc model.WriteDropletInput).
+//      input shape (matches the WriteDropletInput wire contract).
 //   2. ModifiesResource flag is set so the agent loop's confirm
 //      gate fires.
 //   3. Author resolution prefers ctx.userId, falls back to "agent".
@@ -162,9 +162,7 @@ test('droplet_create: missing payload returns a friendly error (no GraphQL call)
   }
 });
 
-test('droplet_create: tool metadata matches Go reference', () => {
-  // Mirrors raindb-phoenix-oc/internal/ai/tools_droplet.go::
-  // tenantDropletTools, the entry at lines 142-167.
+test('droplet_create: tool metadata matches the tenant tool spec', () => {
   assert.equal(droplet_create.name, 'droplet_create');
   assert.equal(droplet_create.minRole, 'write');
   assert.equal(droplet_create.modifiesResource, true);

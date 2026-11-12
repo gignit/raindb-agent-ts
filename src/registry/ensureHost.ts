@@ -1,9 +1,9 @@
 // ensureHost.ts -- ToolContext host normalizer.
 //
-// Existing code paths in fdn-app + raindb-app construct ToolContext
-// from {creds, role, userId, product, marketplaceBaseUrl} without a
+// Existing Node consumer code paths construct ToolContext from
+// {creds, role, userId, product, marketplaceBaseUrl} without a
 // `host` field -- the host abstraction was added in the
-// goja-host-adapter refactor and predates those call sites.
+// host-adapter refactor and predates those call sites.
 //
 // `ensureHost(ctx)` returns a normalized ctx with `host` populated
 // via `makeNodeHost(ctx.creds)` when absent. This is the migration

@@ -151,7 +151,7 @@ test('key_revoke: emits RevokeAPIKey mutation', async () => {
   }
 });
 
-test('key tools: metadata matches Go reference', () => {
+test('key tools: metadata matches the tenant tool spec', () => {
   assert.equal(key_list.minRole, 'read');
   assert.ok(!key_list.modifiesResource);
 

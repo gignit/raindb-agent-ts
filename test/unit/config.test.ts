@@ -97,7 +97,7 @@ test('config_get: surfaces server-side null as error', async () => {
   }
 });
 
-test('config_get: tool metadata matches Go reference', () => {
+test('config_get: tool metadata matches the tenant tool spec', () => {
   assert.equal(config_get.name, 'config_get');
   assert.equal(config_get.minRole, 'read');
   assert.ok(!config_get.modifiesResource);

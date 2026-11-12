@@ -1,10 +1,10 @@
-// raindbAi.ts -- default-model resolution against raindb-api's
+// raindbAi.ts -- default-model resolution against the RainDB API's
 // llmRegistry GraphQL query.
 //
 // Historical note: this file used to also export
 // `makeRaindbAiClient`, a thin wrapper around openai-node pointed
 // at raindb's /v1/* surface. That was removed in the
-// goja-host-adapter refactor in favor of the AgentHost surface --
+// host-adapter refactor in favor of the AgentHost surface --
 // hosts now expose `chatCompletion` directly, and the Node host
 // (src/host/node.ts::makeNodeHost) wraps openai-node internally.
 // Callers that need to make a chat completion call call
@@ -57,7 +57,7 @@ const defaultsCache = new Map<string, CachedDefaults>();
 
 /**
  * Resolve the canonical default model id for a given capability
- * by querying raindb's `llmRegistry`. Cached per API key for 5
+ * by querying the RainDB API's `llmRegistry`. Cached per API key for 5
  * minutes; hot-path callers (every agent turn) pay one network
  * round trip per cache TTL.
  *
@@ -123,8 +123,7 @@ export async function resolveDefaultChatModel(
   const m = await resolveDefaultModel(creds, 'chat', host);
   if (!m) {
     throw new Error(
-      'resolveDefaultChatModel: raindb registry has no model with chat capability '
-      + '(check platform-llm-model + platform-config-llm seeds)',
+      'resolveDefaultChatModel: raindb registry has no model with chat capability',
     );
   }
   return m;

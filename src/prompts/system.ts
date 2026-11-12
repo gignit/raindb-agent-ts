@@ -4,7 +4,7 @@
 // product-specific system prompt and pass it through `runAgent`
 // as `systemPrompt`. The package contributes the small "You are
 // the agent for a RainDB-backed product" preamble shared across
-// fdn-app, raindb-app, and any future consumer.
+// host applications and any future consumer.
 //
 // More elaborate prompt assembly (templating, mustache rendering,
 // per-folder context blocks) lives in the host. Keep this minimal.

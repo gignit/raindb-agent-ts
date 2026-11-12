@@ -1,6 +1,5 @@
 // entity.ts -- agent tools for entity-lifecycle primitives.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_entity.go::tenantEntityTools.
 // 6 tools: 1 read + 5 mutating. Lifecycle covers tag/untag (S3
 // object tags), expiration scheduling (lifecycle-policy driven),
 // and the immediate force-expire shortcut.
@@ -76,13 +75,12 @@ const LIST_KEYS_QUERY = `
 `;
 
 // ---------------------------------------------------------------------------
-// entity_version_history -- Go ref: tools_entity.go (lines 17-41)
-//   + ops/entity.go::EntityVersionHistory (lines 162-200)
+// entity_version_history
 //
-// The Go op walks ALL S3 keys under entities/<formation>/<scope>/
-// and projects each *.json filename to a dropletId. We mirror via
-// the listKeys GraphQL query (no formationId, raw prefix), reading
-// pages until exhausted and projecting in TS.
+// Walks ALL S3 keys under entities/<formation>/<scope>/ and projects
+// each *.json filename to a dropletId, via the listKeys GraphQL query
+// (no formationId, raw prefix), reading pages until exhausted and
+// projecting in TS.
 // ---------------------------------------------------------------------------
 
 export const entity_version_history: RegisteredTool = {
@@ -134,7 +132,7 @@ export const entity_version_history: RegisteredTool = {
       cursor = page.nextCursor;
     }
     // Project to EntityVersion[]: keep only *.json keys, derive
-    // dropletId from the basename. Mirrors ops/entity.go:177-198.
+    // dropletId from the basename.
     const versions: EntityVersion[] = [];
     for (const key of allKeys) {
       if (!key.endsWith('.json')) continue;
@@ -144,15 +142,14 @@ export const entity_version_history: RegisteredTool = {
       const dropletId = filename.slice(0, -'.json'.length);
       versions.push({ dropletId, key });
     }
-    // Reverse so newest-first (mirrors Go op lines 196-198).
+    // Reverse so newest-first.
     versions.reverse();
     return versions;
   },
 };
 
 // ---------------------------------------------------------------------------
-// entity_tag -- Go ref: tools_entity.go (lines 42-72)
-//   + ops/entity.go::TagEntity (lines 60-95)
+// entity_tag
 // ---------------------------------------------------------------------------
 
 export const entity_tag: RegisteredTool = {
@@ -181,8 +178,7 @@ export const entity_tag: RegisteredTool = {
     if (!formation || !scope || !rawTags) {
       return { error: 'formation, scope, tags required' };
     }
-    // Coerce to map[string]string -- silently drop non-string values
-    // to mirror the Go side's behavior (tools_entity.go:62-66).
+    // Coerce to a string-valued map -- silently drop non-string values.
     const tags: Record<string, string> = {};
     for (const [k, v] of Object.entries(rawTags)) {
       if (typeof v === 'string') tags[k] = v;
@@ -206,8 +202,7 @@ export const entity_tag: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// entity_untag -- Go ref: tools_entity.go (lines 73-97)
-//   + ops/entity.go::UntagEntity (lines 99-130)
+// entity_untag
 // ---------------------------------------------------------------------------
 
 export const entity_untag: RegisteredTool = {
@@ -253,8 +248,7 @@ export const entity_untag: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// entity_mark_for_expiration -- Go ref: tools_entity.go (lines 98-122)
-//   + ops/entity.go::MarkForExpiration (lines 136-144)
+// entity_mark_for_expiration
 //
 // Wraps tagEntity with a synthetic 'expire-after-days' tag.
 // ---------------------------------------------------------------------------
@@ -308,8 +302,7 @@ export const entity_mark_for_expiration: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// entity_cancel_expiration -- Go ref: tools_entity.go (lines 123-145)
-//   + ops/entity.go::CancelExpiration (lines 148-150)
+// entity_cancel_expiration
 // ---------------------------------------------------------------------------
 
 export const entity_cancel_expiration: RegisteredTool = {
@@ -355,11 +348,10 @@ export const entity_cancel_expiration: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// entity_expire -- Go ref: tools_entity.go (lines 146-168)
-//   + ops/entity.go::ExpireDroplet (lines 28-56)
+// entity_expire
 //
-// Hard delete -- not lifecycle-policy. minRole=admin per
-// the M2 checklist (destructive shortcut).
+// Hard delete -- not lifecycle-policy. minRole=admin (destructive
+// shortcut).
 // ---------------------------------------------------------------------------
 
 export const entity_expire: RegisteredTool = {

@@ -485,7 +485,7 @@ test('droplet_bulk_update: rejects entry missing scopeKey', async () => {
 // metadata parity
 // ---------------------------------------------------------------------------
 
-test('droplet read-side: metadata matches Go reference', () => {
+test('droplet read-side: metadata matches the tenant tool spec', () => {
   assert.equal(droplet_read_current.minRole, 'read');
   assert.ok(!droplet_read_current.modifiesResource);
   assert.deepEqual(droplet_read_current.parameters.required, ['formation', 'scope']);
@@ -503,7 +503,7 @@ test('droplet read-side: metadata matches Go reference', () => {
   assert.deepEqual(droplet_keys.parameters.required, ['prefix']);
 });
 
-test('droplet mutating: metadata matches Go reference', () => {
+test('droplet mutating: metadata matches the tenant tool spec', () => {
   assert.equal(droplet_update.minRole, 'write');
   assert.equal(droplet_update.modifiesResource, true);
   assert.deepEqual(

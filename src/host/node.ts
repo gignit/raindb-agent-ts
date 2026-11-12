@@ -1,11 +1,11 @@
 // host/node.ts -- the Node AgentHost. Wraps global fetch +
-// openai-node so this is what existing Node consumers (fdn-app,
-// raindb-app server) bind to without changing their auth surface.
+// openai-node so this is what existing Node consumers (host
+// applications) bind to without changing their auth surface.
 //
 // The Node host is fully self-contained: no other host
-// implementation should import from here. The bolt host (Go-side,
-// in raindb-phoenix-lightning) implements the same AgentHost
-// interface against its goja sandbox primitives.
+// implementation should import from here. The bolt host implements
+// the same AgentHost interface against the RainDB Lightning bolt
+// sandbox primitives.
 
 import OpenAI from 'openai';
 
@@ -27,7 +27,7 @@ import type {
  *
  * The endpoint in `creds` is the GraphQL endpoint
  * (e.g. http://localhost:8080/graphql). The openai baseURL is
- * derived by stripping `/graphql` and appending `/v1` -- raindb-api
+ * derived by stripping `/graphql` and appending `/v1` -- the RainDB API
  * hosts both surfaces on the same origin.
  */
 export function makeNodeHost(creds: GraphQLOptions): AgentHost {
@@ -87,7 +87,7 @@ export function makeNodeHost(creds: GraphQLOptions): AgentHost {
 }
 
 /**
- * raindb-api hosts both the GraphQL surface (`/graphql`) and the
+ * The RainDB API hosts both the GraphQL surface (`/graphql`) and the
  * openai-spec REST surface (`/v1/*`) on the same origin. Strip the
  * trailing `/graphql` and append `/v1`.
  */

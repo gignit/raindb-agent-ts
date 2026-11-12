@@ -1,13 +1,11 @@
 // types.ts -- public contract for the agent runtime + tool registry.
 //
-// These types mirror the Go reference at
-// raindb-phoenix-oc/internal/ai/registry.go::Registration and
-// pkg/llm/types.go::ToolParameters. Wire shapes seen by the model
-// must match between the Go and TypeScript surfaces so a tool
-// invoked from raindb-cli and the same tool invoked from a
-// TS-portal agent are substitutable.
+// These types implement the RainDB tool registration contract.
+// Wire shapes seen by the model must match across surfaces so a
+// tool invoked from raindb-cli and the same tool invoked from a
+// TS agent are substitutable.
 //
-// Two consumers (fdn-app, raindb-app) bind to these. Changing the
+// Node consumers (host applications) bind to these. Changing the
 // public exports is a breaking change.
 
 import type { AgentHost } from '../host/types.js';
@@ -16,16 +14,16 @@ export type { AgentHost };
 
 /**
  * Per-tenant credentials passed on every GraphQL call. The host
- * (fdn-app, raindb-app, or any future consumer) populates this on
- * each agent turn from whatever auth surface it owns. The package
- * never reads env vars directly; the caller's resolution chain is
- * the single source of truth.
+ * (any Node consumer) populates this on each agent turn from
+ * whatever auth surface it owns. The package never reads env vars
+ * directly; the caller's resolution chain is the single source of
+ * truth.
  */
 export interface GraphQLOptions {
   /**
    * Tenant API key (rdb_*). Sent as `X-API-Key` header on the
    * GraphQL request and as `Authorization: Bearer ...` on the
-   * openai-spec REST surface (raindb-api accepts both).
+   * openai-spec REST surface (the RainDB API accepts both).
    */
   apiKey?: string;
   /**
@@ -42,11 +40,10 @@ export interface GraphQLOptions {
  * the caller's permissions. Tools declare a `minRole`; the registry
  * filters out anything above the caller's grant.
  *
- * The default scale is fdn-app's three-rung ladder. Hosts that need
- * a different policy (raindb-app uses platform-admin distinctions)
- * can extend this union via TypeScript module augmentation OR pass
- * their own role string -- the comparator (`buildToolDefs`) is
- * pluggable.
+ * The default scale is a three-rung ladder. Hosts that need
+ * a different policy (e.g. finer admin distinctions) can extend
+ * this union via TypeScript module augmentation OR pass their own
+ * role string -- the comparator (`buildToolDefs`) is pluggable.
  */
 export type ToolRole = 'read' | 'write' | 'admin';
 
@@ -69,12 +66,11 @@ export interface ToolContext {
    * bolt sandboxes) can inject their own transport.
    *
    * Node consumers populate via `makeNodeHost(creds)`. The Lightning
-   * bolt host is implemented in Go (raindb-phoenix-lightning's
-   * pkg/lightning runtime) and wraps the goja sandbox's ctx.fetch.
+   * bolt host wraps the bolt sandbox's ctx.fetch.
    *
    * Required. Constructors that don't set it should call
    * `ensureHost(ctx)` to auto-fill the Node host (the common case
-   * for existing code paths in fdn-app + raindb-app).
+   * for existing Node consumer code paths).
    */
   host: AgentHost;
   /**
@@ -90,43 +86,29 @@ export interface ToolContext {
    */
   userId?: string;
   /**
-   * Opaque host extension. fdn-app stuffs project/folder context
-   * here for its own product tools; raindb-app does the same with
-   * its own state. The shared tools never read this.
+   * Opaque host extension. A host application stuffs project/folder
+   * context here for its own product tools; another does the same
+   * with its own state. The shared tools never read this.
    */
   product?: Record<string, unknown>;
   /**
-   * Base URL of the marketplace REST API on **raindb-api**
-   * (`/api/marketplace/*`). Per FINAL DECISION S.1 (in raindb-
-   * phoenix-oc/docs/BRIDGE_REFACTOR_PLAN.md): marketplace lives
-   * on raindb-api at :8080, NOT on raindb-app at :4000. This is
-   * a post-S.1 detail; pre-S.1 the surface was on raindb-app and
-   * was anonymous-readable, and this comment used to say so.
+   * Base URL of the marketplace REST API on the RainDB API
+   * (`/api/marketplace/*`).
    *
-   * Auth model: raindb-api's authMiddleware gates `/api/
-   * marketplace/*`. Fetch calls MUST send `X-API-Key: <caller
-   * tenant key>` (the marketplace tools pull it from `ctx.creds.
-   * apiKey`). The caller identity is used for authn /
-   * observability only; the actual data source is the marketplace
-   * tenant, resolved server-side via `platform_marketplace_
-   * credential` (the credentialed cross-tenant pattern shipped in
-   * phoenix commit 2ee476a). The caller never sees the
+   * Auth model: the RainDB API gates `/api/marketplace/*`. Fetch
+   * calls MUST send `X-API-Key: <caller tenant key>` (the
+   * marketplace tools pull it from `ctx.creds.apiKey`). The caller
+   * identity is used for authn / observability only; the actual
+   * data source is resolved server-side. The caller never sees the
    * marketplace tenant's creds.
    *
-   * Data layer: list reads use Tier 3 periscope SQL
-   * (`runMarketplaceSQL` against `entity."platform_marketplace_
-   * pack"`); detail reads use direct ReadLatest on by-vendor-
-   * pack-version / by-id-latest indexes (O+1 pattern). All of
-   * this happens inside the REST handler; from the agent tool's
-   * perspective the surface is plain HTTP GET.
+   * From the agent tool's perspective the surface is plain HTTP GET.
    *
    * Required when calling marketplace tools (pack_list,
    * pack_info, pack_get, pack_features, vendor_list,
    * vendor_info). Absence is an explicit error per the
    * "no fallbacks" principle, not a silent fallback to a
-   * default URL. Hosts populate this per turn from their
-   * env (fdn-app: `RAINDB_API_URL`, default
-   * http://localhost:8080; raindb-app: relative -- same host).
+   * default URL. Hosts populate this per turn from their env.
    */
   marketplaceBaseUrl?: string;
 }
@@ -144,10 +126,10 @@ export type ToolArgs = Record<string, unknown>;
  * The execute function signature. Tools return any JSON-serializable
  * value; the agent loop stringifies it for the model. Errors thrown
  * here are caught by the loop and surfaced to the model as a
- * tool-error so the model can retry or explain. Mirrors the Go
- * `Invoke func(ctx, args) (ToolCallResult, error)` shape: TS
- * exceptions correspond to the Go error return, returned objects
- * with an `error` field correspond to `ToolCallResult{Error: ...}`.
+ * tool-error so the model can retry or explain. Following the RainDB
+ * tool registration contract: thrown exceptions correspond to an
+ * invocation error return, and returned objects with an `error`
+ * field correspond to a tool-call result carrying an error.
  */
 export type ToolFn = (
   ctx: ToolContext,
@@ -156,8 +138,8 @@ export type ToolFn = (
 
 /**
  * JSON-Schema parameter shape for one tool. Mirrors openai-spec's
- * function-tool schema and Go's `llm.ToolParameters` 1:1. The
- * agent loop forwards this verbatim to ai.chat.completions.create.
+ * function-tool schema 1:1. The agent loop forwards this verbatim
+ * to ai.chat.completions.create.
  */
 export interface ToolParameters {
   type: 'object';
@@ -184,10 +166,10 @@ export interface ToolProperty {
 }
 
 /**
- * One registered tool. Mirrors the Go `Registration` struct in
- * `internal/ai/registry.go` field-for-field:
+ * One registered tool. Implements the RainDB tool registration
+ * contract field-for-field:
  *
- *   Go field             | TS field
+ *   registration field   | TS field
  *   ---------------------+------------------
  *   Name                 | name
  *   Description          | description
@@ -240,8 +222,8 @@ export interface RegisteredTool {
  * Streaming agent-loop event surface. Hosts subscribe via
  * `runAgent({ onEvent })`. Each event corresponds to one phase
  * in the agent loop; consumers translate to their own UI/SSE
- * shape (fdn-app forwards each event as one SSE frame; CLIs print
- * a thinking-trace; raindb-app's portal will mirror fdn-app).
+ * shape (e.g. forward each event as one SSE frame, or print a
+ * thinking-trace in a CLI).
  */
 export type AgentEvent =
   | { type: 'thinking'; iteration: number }

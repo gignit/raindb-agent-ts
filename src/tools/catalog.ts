@@ -1,6 +1,5 @@
 // catalog.ts -- agent tools for catalog primitives.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_catalog.go::tenantCatalogTools.
 // 6 tools: 2 read + 4 mutating. Catalog is RainDB's hierarchical
 // entry-list primitive (the foundation under fdn-folders, etc.).
 
@@ -13,7 +12,7 @@ import {
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror internal/ops/catalog.go)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface CatalogMutationResult {
@@ -109,8 +108,7 @@ const CATALOG_TRANSFER_MUTATION = `
 `;
 
 // ---------------------------------------------------------------------------
-// catalog_list -- Go ref: tools_catalog.go (lines 19-42)
-//   + ops/catalog.go::CatalogList (lines 172-194)
+// catalog_list
 // ---------------------------------------------------------------------------
 
 export const catalog_list: RegisteredTool = {
@@ -149,8 +147,7 @@ export const catalog_list: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// catalog_tree -- Go ref: tools_catalog.go (lines 43-66)
-//   + ops/catalog.go::CatalogTree (lines 199-226)
+// catalog_tree
 // ---------------------------------------------------------------------------
 
 export const catalog_tree: RegisteredTool = {
@@ -197,8 +194,7 @@ export const catalog_tree: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// catalog_insert -- Go ref: tools_catalog.go (lines 67-92)
-//   + ops/catalog.go::CatalogInsert (lines 48-74)
+// catalog_insert
 // ---------------------------------------------------------------------------
 
 export const catalog_insert: RegisteredTool = {
@@ -245,8 +241,7 @@ export const catalog_insert: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// catalog_update -- Go ref: tools_catalog.go (lines 93-119)
-//   + ops/catalog.go::CatalogUpdate (lines 106-136)
+// catalog_update
 // ---------------------------------------------------------------------------
 
 export const catalog_update: RegisteredTool = {
@@ -297,8 +292,7 @@ export const catalog_update: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// catalog_delete -- Go ref: tools_catalog.go (lines 120-144)
-//   + ops/catalog.go::CatalogDelete (lines 77-103)
+// catalog_delete
 // ---------------------------------------------------------------------------
 
 export const catalog_delete: RegisteredTool = {
@@ -341,8 +335,7 @@ export const catalog_delete: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// catalog_transfer -- Go ref: tools_catalog.go (lines 145-170)
-//   + ops/catalog.go::CatalogTransfer (lines 139-169)
+// catalog_transfer
 // ---------------------------------------------------------------------------
 
 export const catalog_transfer: RegisteredTool = {

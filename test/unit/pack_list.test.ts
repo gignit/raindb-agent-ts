@@ -1,11 +1,9 @@
 // pack_list.test.ts -- unit test for the pack_list marketplace tool.
 //
-// Phase 6 refactor: pack_list now fetches from raindb-app's
-// /api/marketplace/packs REST endpoint instead of going through
-// raindb-api GraphQL. The shared package no longer reaches into
-// the marketplace droplets through per-tenant credentials -- the
-// marketplace is a "partner of the bridge" (anonymous-readable
-// REST surface served by raindb-app under its platform admin key).
+// pack_list fetches from the RainDB marketplace REST endpoint
+// (/api/marketplace/packs), not the GraphQL API. The marketplace is
+// an anonymous-readable REST surface, so the package does not reach
+// into marketplace droplets through per-tenant credentials.
 //
 // We mock global fetch and verify:
 //   1. The tool hits ${marketplaceBaseUrl}/api/marketplace/packs

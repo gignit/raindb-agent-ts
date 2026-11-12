@@ -1,9 +1,5 @@
 // droplet.ts -- agent tools for droplet primitives.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_droplet.go::tenantDropletTools.
-// Tool names + parameters match exactly so the Go and TS surfaces
-// are substitutable from the model's perspective.
-//
 // 9 tools landed (M1 + M2 batch 2):
 //   read-side (5):  droplet_read_current, droplet_read_by_id,
 //                   droplet_read_latest, droplet_list, droplet_keys
@@ -25,7 +21,7 @@ import {
 import type { RegisteredTool, ToolArgs } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror raindb-phoenix-oc/internal/ops/droplet.go)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface DropletResult {
@@ -34,10 +30,9 @@ export interface DropletResult {
   schemaVersion: number;
   /**
    * Write timestamp in Unix MILLISECONDS as a NUMBER. The GraphQL Time
-   * scalar marshals via strconv.FormatInt(UnixMilli, 10) -- a bare JSON
-   * number, not a string (raindb internal/api/graph/model/scalars.go
-   * MarshalTime). Was mistyped `string`, which broke date math on every
-   * consumer; corrected to match the wire + @raindb/bolt-sdk Droplet.ts.
+   * scalar marshals as a bare JSON number, not a string. Was mistyped
+   * `string`, which broke date math on every consumer; corrected to match
+   * the wire + @raindb/bolt-sdk Droplet.ts.
    */
   ts: number;
   author: string;
@@ -65,9 +60,9 @@ export interface KeyEntry {
   key: string;
   size: number;
   // GraphQL KeyEntry.lastModified is the Time! scalar -> Unix-MILLISECONDS
-  // NUMBER over the wire. (NB: this differs from the goja-host binding used by
-  // @raindb/bolt-sdk, which emits an RFC3339 string for engine parity -- that
-  // is the HOST boundary, not the GraphQL wire this raw client decodes.)
+  // NUMBER over the wire. (NB: this differs from the bolt sandbox host binding
+  // used by @raindb/bolt-sdk, which emits an RFC3339 string for engine parity
+  // -- that is the HOST boundary, not the GraphQL wire this raw client decodes.)
   lastModified: number;
   etag?: string;
 }
@@ -107,7 +102,7 @@ export interface BulkDropletResult {
 }
 
 // ---------------------------------------------------------------------------
-// GraphQL operations -- mirror internal/ops/queries.go verbatim.
+// GraphQL operations.
 // ---------------------------------------------------------------------------
 
 const READ_CURRENT_QUERY = `
@@ -252,8 +247,7 @@ function coerceScope(raw: unknown): unknown {
 }
 
 // ---------------------------------------------------------------------------
-// droplet_read_current -- Go ref: tools_droplet.go (lines 25-48)
-//   + ops/droplet.go::ReadCurrent (lines 106-131)
+// droplet_read_current
 // ---------------------------------------------------------------------------
 
 export const droplet_read_current: RegisteredTool = {
@@ -293,8 +287,7 @@ export const droplet_read_current: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_read_by_id -- Go ref: tools_droplet.go (lines 49-71)
-//   + ops/droplet.go::ReadDroplet (lines 165-190)
+// droplet_read_by_id
 // ---------------------------------------------------------------------------
 
 export const droplet_read_by_id: RegisteredTool = {
@@ -330,8 +323,7 @@ export const droplet_read_by_id: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_read_latest -- Go ref: tools_droplet.go (lines 72-95)
-//   + ops/droplet.go::ReadLatest (lines 136-162)
+// droplet_read_latest
 // ---------------------------------------------------------------------------
 
 export const droplet_read_latest: RegisteredTool = {
@@ -373,20 +365,27 @@ export const droplet_read_latest: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_list -- Go ref: tools_droplet.go (lines 96-119)
-//   + ops/droplet.go::ListDroplets (lines 265-289)
+// droplet_list
 // ---------------------------------------------------------------------------
 
 export const droplet_list: RegisteredTool = {
   name: 'droplet_list',
   description:
     'List droplet keys under a formation prefix (structured droplet rows). '
+    + "Pass optional 'scopeValue' to resolve a semantic entity scope "
+    + 'server-side before the LIST. '
     + 'Equivalent CLI: raindb-cli droplet list',
   minRole: 'read',
   parameters: {
     type: 'object',
     properties: {
       formation: { type: 'string' },
+      scopeValue: {
+        type: 'string',
+        description:
+          "Optional semantic entity scope; resolved to the entity's "
+          + 'prefix server-side before listing.',
+      },
       prefix: { type: 'string', description: 'Optional prefix filter' },
       pageSize: { type: 'integer', description: 'Max results (default 100)' },
     },
@@ -403,6 +402,8 @@ export const droplet_list: RegisteredTool = {
     };
     const prefix = stringArg(args, 'prefix');
     if (prefix) input['prefix'] = prefix;
+    const scopeValue = stringArg(args, 'scopeValue');
+    if (scopeValue) input['scopeValue'] = scopeValue;
     const data = await executeGraphQL<{ listDroplets: DropletPage }>(
       LIST_DROPLETS_QUERY,
       { input },
@@ -414,8 +415,7 @@ export const droplet_list: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_keys -- Go ref: tools_droplet.go (lines 120-141)
-//   + ops/droplet.go::ListAllKeys (lines 346-356)
+// droplet_keys
 // ---------------------------------------------------------------------------
 
 export const droplet_keys: RegisteredTool = {
@@ -468,8 +468,7 @@ export const droplet_keys: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_create -- Go ref: tools_droplet.go (lines 142-167)
-//   + ops/droplet.go::WriteDroplet (lines 209-248). Shipped in M1.
+// droplet_create
 // ---------------------------------------------------------------------------
 
 export const droplet_create: RegisteredTool = {
@@ -522,14 +521,12 @@ export const droplet_create: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_update -- Go ref: tools_droplet.go (lines 168-204)
-//   + ops/upload.go::ReadModifyWrite (lines 120-195)
+// droplet_update
 //
-// Read-modify-write with CAS retry. The TS port collapses the Go
-// retry loop into a single API call: the GraphQL writeDroplet
-// mutation already supports expectedETag for CAS, and we read the
-// current droplet via readLatest first to get the etag. On
-// concurrent-update we DO NOT auto-retry here (the Go side does)
+// Read-modify-write with CAS retry. Collapses the retry loop into a
+// single API call: the GraphQL writeDroplet mutation already supports
+// expectedETag for CAS, and we read the current droplet via readLatest
+// first to get the etag. On concurrent-update we DO NOT auto-retry here
 // because the agent loop is iterative -- the model can re-issue the
 // tool call if it sees a CAS failure. Keeps this tool body simple.
 // ---------------------------------------------------------------------------
@@ -613,8 +610,7 @@ export const droplet_update: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_push_public -- Go ref: tools_droplet.go (lines 205-228)
-//   + ops/droplet.go::PushPublic (lines 360-382)
+// droplet_push_public
 // ---------------------------------------------------------------------------
 
 export const droplet_push_public: RegisteredTool = {
@@ -649,13 +645,11 @@ export const droplet_push_public: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_bulk_create -- Go ref: tools_droplet.go (lines 388-439)
-//   + ops/droplet_bulk.go::BulkCreateDroplets (lines 96-123)
+// droplet_bulk_create
 //
-// Per the M2 checklist: skip the `filePath` arm (filesystem-only;
-// portal hosts have no operator filesystem). Accept only `entries`.
-// Per-entry success/failure reported; one entry's failure does not
-// abort the others.
+// Skip the `filePath` arm (filesystem-only; host applications have no
+// operator filesystem). Accept only `entries`. Per-entry success/failure
+// reported; one entry's failure does not abort the others.
 // ---------------------------------------------------------------------------
 
 export const droplet_bulk_create: RegisteredTool = {
@@ -736,8 +730,7 @@ export const droplet_bulk_create: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// droplet_bulk_update -- Go ref: tools_droplet.go (lines 444-500)
-//   + ops/droplet_bulk.go::BulkUpdateDroplets (lines 136-193)
+// droplet_bulk_update
 //
 // Same simplification as bulk_create (no filePath). Each entry must
 // carry the scopeKey field; the rest merges onto the existing payload.
@@ -852,9 +845,8 @@ export const droplet_bulk_update: RegisteredTool = {
 };
 
 /**
- * Per-domain catalog. Order mirrors the Go reference's tool order
- * in tools_droplet.go::tenantDropletTools so the model sees a
- * stable surface across raindb-cli + the TS portals.
+ * Per-domain catalog. Order is stable so the model sees a
+ * consistent surface across raindb-cli + Node consumers.
  */
 export const dropletTools: RegisteredTool[] = [
   droplet_read_current,

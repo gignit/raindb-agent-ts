@@ -1,7 +1,6 @@
 // formation.ts -- agent tools for formation introspection +
 // publishing.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_formation.go::tenantFormationTools.
 // Three tools: formation_list (read), formation_describe (read),
 // formation_publish (admin, modifiesResource).
 
@@ -14,7 +13,7 @@ import {
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror internal/ops/formation.go)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface FormationInfo {
@@ -51,8 +50,7 @@ interface PublishFormationResponse {
   publishFormation: PublishFormationResult;
 }
 
-// Queries mirror internal/ops/queries.go verbatim. Selection sets
-// stay in lockstep with the Go side.
+// GraphQL operations.
 
 const LIST_FORMATIONS_QUERY = `
   query {
@@ -89,8 +87,7 @@ const PUBLISH_FORMATION_MUTATION = `
 `;
 
 // ---------------------------------------------------------------------------
-// formation_list -- Go ref: tools_formation.go (lines 17-28)
-//   + ops/formation.go::ListFormations (lines 36-44)
+// formation_list
 // ---------------------------------------------------------------------------
 
 export const formation_list: RegisteredTool = {
@@ -112,16 +109,21 @@ export const formation_list: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// formation_describe -- Go ref: tools_formation.go (lines 29-50)
-//   + ops/formation.go::DescribeFormation (lines 47-64)
+// formation_describe
 // ---------------------------------------------------------------------------
 
 export const formation_describe: RegisteredTool = {
   name: 'formation_describe',
   description:
-    'Show the full formation definition (schema, indexes, tier config, '
-    + 'catalog schema, etc.). Call before catalog_insert or droplet_create '
-    + 'to learn the shape. Equivalent CLI: raindb-cli formation describe',
+    'Show the FULLY-RESOLVED formation definition: `config` carries every '
+    + 'option resolved into its real field (defaults filled in) PLUS the '
+    + 'manifest-driven `features` section (config.features.<name> = '
+    + '{enabled}) that gates which tools apply (e.g. periscopeSQL, '
+    + 'vectorConfig, catalogConfig, floatConfig, an index descIndex for '
+    + 'chain_*). `schema` is the droplet JSON schema. The config is also a '
+    + 'valid publish INPUT -- save it, tweak a value, republish. Call '
+    + 'before catalog_insert or droplet_create to learn the shape. '
+    + 'Equivalent CLI: raindb-cli formation describe',
   minRole: 'read',
   parameters: {
     type: 'object',
@@ -149,8 +151,7 @@ export const formation_describe: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// formation_publish -- Go ref: tools_formation.go (lines 51-79)
-//   + ops/formation.go::PublishFormation (lines 68-93)
+// formation_publish
 // ---------------------------------------------------------------------------
 
 export const formation_publish: RegisteredTool = {
