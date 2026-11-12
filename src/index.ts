@@ -2,21 +2,16 @@
  * @raindb/agent -- shared TypeScript agent runtime + tool catalog
  * for the RainDB ecosystem.
  *
- * Two consumers: fdn-app (the FDN portal) and raindb-app (the
- * RainDB platform portal). Both import the same agent runtime,
+ * Node consumers (host applications) import the same agent runtime,
  * the same tenant tool table, and the same system-prompt scaffold
- * so the agent surface stays in lockstep across the two products.
- *
- * The Go agent in raindb-phoenix-oc/internal/ai/ is the reference
- * implementation. This package is its TypeScript mirror. When the
- * two diverge, the Go side wins.
+ * so the agent surface stays in lockstep across products.
  *
  * THIS FILE IS THE PUBLIC API. Hosts bind to these exports;
  * changing them is a breaking change. Internals under src/ are
  * not exported -- they can iterate freely between releases.
  */
 
-export const VERSION = '0.6.0';
+export const VERSION = '0.8.0';
 
 // === Agent runtime ===
 export { runAgent } from './loop/index.js';
@@ -80,12 +75,11 @@ export {
 // === Host adapter ===
 //
 // Hosts inject an AgentHost into ToolContext. Two known hosts:
-//   - makeNodeHost(creds) -- Node consumers (fdn-app, raindb-app
-//     server). Wraps globalThis.fetch + openai-node.
-//   - The Lightning bolt host, implemented in Go (lives in
-//     raindb-phoenix-lightning's pkg/lightning runtime), wraps
-//     the goja sandbox's ctx.fetch + ctx.secrets + ctx.log.
-//     Not shipped from this package.
+//   - makeNodeHost(creds) -- Node consumers (host application
+//     servers). Wraps globalThis.fetch + openai-node.
+//   - The Lightning bolt host, which wraps the bolt sandbox's
+//     ctx.fetch + ctx.secrets + ctx.log. Not shipped from this
+//     package.
 export type {
   AgentHost,
   HostFetchInit,

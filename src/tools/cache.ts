@@ -1,6 +1,5 @@
 // cache.ts -- agent tools for object-cache observability.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_cache.go::tenantCacheTools.
 // Admin variants (cache_stats_tenant, cache_stats_all) are NOT
 // ported here -- those are admin-scoped and belong in a separate
 // admin tool catalog if/when one ships.
@@ -9,7 +8,7 @@ import { executeGraphQL } from '../client/graphql.js';
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror internal/ops/cache.go::CacheStatsRow)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 interface HostCacheRow {
@@ -41,8 +40,7 @@ interface MyCacheStatsResponse {
   myCacheStats: CacheStatsRow | null;
 }
 
-// Selection set mirrors internal/ops/queries.go::cacheStatsFields. Stay
-// in lockstep when the Go side changes; the parity gate is the test
+// Selection set for the cache stats fields. The parity gate is the test
 // in test/unit/cache_stats_my.test.ts.
 const MY_CACHE_STATS_QUERY = `
   query MyCacheStats {
@@ -85,8 +83,7 @@ const MY_CACHE_STATS_QUERY = `
 `;
 
 // ---------------------------------------------------------------------------
-// cache_stats_my -- Go ref: tools_cache.go::tenantCacheTools (lines 16-31)
-//   + ops/cache.go::GetMyCacheStats (lines 163-174)
+// cache_stats_my
 // ---------------------------------------------------------------------------
 
 export const cache_stats_my: RegisteredTool = {
@@ -103,8 +100,8 @@ export const cache_stats_my: RegisteredTool = {
       ctx.creds,
       ctx.host,
     );
-    // Go side returns an empty CacheStatsRow when myCacheStats is null
-    // (ops/cache.go:170-172). Mirror that so callers get a stable shape.
+    // Return an empty CacheStatsRow when myCacheStats is null so
+    // callers get a stable shape.
     return data.myCacheStats ?? ({
       tenantId: '',
       maxBytes: 0,

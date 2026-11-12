@@ -1,12 +1,10 @@
 // query.ts -- agent tools for ad-hoc SQL + vector search.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_query.go::tenantSQLTools.
 // 2 tools, both read-only:
 //
 //   sql_execute   -- arbitrary DuckDB SQL through executeSQL /
-//                    queryEntities. The TS port adds a SELECT-only
-//                    guard on top of the Go behavior because the
-//                    agent should not be writing data via SQL.
+//                    queryEntities, with a SELECT-only guard because
+//                    the agent should not be writing data via SQL.
 //   vector_search -- semantic search over an embedding-enabled
 //                    formation.
 
@@ -21,11 +19,10 @@ import {
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// SELECT-only guard. The Go side has no such guard because operators
-// run raindb-cli interactively and own the consequences. The agent
-// surface enforces SELECT-only client-side regardless of the
-// caller's role -- writes go through tool primitives (droplet_*,
-// catalog_*) which give per-row validation + audit.
+// SELECT-only guard. The agent surface enforces SELECT-only
+// client-side regardless of the caller's role -- writes go through
+// tool primitives (droplet_*, catalog_*) which give per-row
+// validation + audit.
 // ---------------------------------------------------------------------------
 
 const FORBIDDEN_SQL_KEYWORDS = [
@@ -68,14 +65,11 @@ function validateSelectOnly(rawQuery: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// sql_execute -- Go ref: tools_query.go (lines 19-49)
-//   + ops/sql.go::ExecuteSQL (lines 70-72)
-//   + ops/sql.go::QueryEntities (lines 134-164)
+// sql_execute
 //
-// SELECT-only guard added per AGENT_TOOL_PARITY.md note. The
-// `formation` arg controls whether raindb-api uses queryEntities
-// (formation-scoped) or executeSQL (tenant-wide); both run
-// through the same DuckDB executor on the server side.
+// The `formation` arg controls whether the RainDB API uses
+// queryEntities (formation-scoped) or executeSQL (tenant-wide);
+// both run through the same DuckDB executor on the server side.
 // ---------------------------------------------------------------------------
 
 export const sql_execute: RegisteredTool = {
@@ -84,7 +78,16 @@ export const sql_execute: RegisteredTool = {
     "Execute a SQL query against the current tenant's formation data via "
     + "DuckDB. Pass optional 'formation' to scope to one formation via "
     + 'QueryEntities. SELECT/WITH only -- writes go through droplet_* or '
-    + 'catalog_* tools. Equivalent CLI: raindb-cli sql',
+    + 'catalog_* tools. The SQL plane is EVENTUALLY CONSISTENT: rows '
+    + 'reflect the last committed periscope snapshot, not necessarily the '
+    + "newest writes. When 'formation' is set the result carries a "
+    + '`latest` freshness bookmark: latest[].freshnessStatus BEHIND means '
+    + 'the snapshot predates the newest writes. Only when the answer must '
+    + 'include those writes, optionally fetch them with droplet_since '
+    + '(after=latest[].snapshotKey) and merge (newest wins). `truncated` '
+    + 'is true when the row ceiling cut the result off. Optional '
+    + "'planStrategy' (range|scan) overrides the view-preparation planner. "
+    + 'Equivalent CLI: raindb-cli sql',
   minRole: 'read',
   parameters: {
     type: 'object',
@@ -92,7 +95,16 @@ export const sql_execute: RegisteredTool = {
       query: { type: 'string' },
       formation: {
         type: 'string',
-        description: 'Optional formation scope',
+        description:
+          'Optional formation scope. Required to receive the freshness '
+          + 'bookmark (latest).',
+      },
+      planStrategy: {
+        type: 'string',
+        enum: ['range', 'scan'],
+        description:
+          'Optional view-preparation planner override; omitted uses the '
+          + "formation's default.",
       },
     },
     required: ['query'],
@@ -102,13 +114,17 @@ export const sql_execute: RegisteredTool = {
     const guardErr = validateSelectOnly(query);
     if (guardErr) return { error: guardErr };
     const formation = stringArg(args, 'formation');
-    return executeSQL(query, formation, ctx.creds, undefined, ctx.host);
+    const planRaw = stringArg(args, 'planStrategy').toLowerCase();
+    const planStrategy =
+      planRaw === 'range' || planRaw === 'scan' ? planRaw : undefined;
+    return executeSQL(query, formation, ctx.creds, undefined, ctx.host, {
+      planStrategy,
+    });
   },
 };
 
 // ---------------------------------------------------------------------------
-// vector_search -- Go ref: tools_query.go (lines 50-89)
-//   + ops/search.go::VectorSearch (lines 93-118)
+// vector_search
 // ---------------------------------------------------------------------------
 
 interface VectorSearchHitCitation {

@@ -238,7 +238,7 @@ test('catalog_transfer: passes source + target + ref', async () => {
   }
 });
 
-test('catalog tools: metadata matches Go reference', () => {
+test('catalog tools: metadata matches the tenant tool spec', () => {
   assert.equal(catalog_list.minRole, 'read');
   assert.ok(!catalog_list.modifiesResource);
   assert.equal(catalog_tree.minRole, 'read');
@@ -449,7 +449,7 @@ test('vector_search: empty hits when server returns null', async () => {
   }
 });
 
-test('query tools: metadata matches Go reference', () => {
+test('query tools: metadata matches the tenant tool spec', () => {
   assert.equal(sql_execute.minRole, 'read');
   assert.ok(!sql_execute.modifiesResource);
   assert.deepEqual(sql_execute.parameters.required, ['query']);

@@ -1,23 +1,15 @@
 // config.ts -- agent tools for tenant service-config inspection.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_config.go::tenantConfigTools.
-//
-// Important: the Go reference exposes ONLY config_get on the tenant
-// surface. The M2 checklist's draft included config_list + config_set
-// from a stale audit -- they don't exist on the Go tenant tool table.
-// (config_set is admin-scoped and ports under the admin catalog if
-// we ever ship one; config_list would be a list-of-overlays which
-// the Go side hasn't surfaced yet.)
-//
-// If/when the Go side adds them, mirror here. Don't invent surfaces
-// the Go reference doesn't have.
+// Only config_get is exposed on the tenant surface. config_set is
+// admin-scoped and would port under an admin catalog if one ships;
+// config_list (a list-of-overlays) is not surfaced yet.
 
 import { executeGraphQL } from '../client/graphql.js';
 import { stringArg } from '../registry/build.js';
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror internal/ops/service_config_remote.go::RemoteServiceConfig)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface RemoteServiceConfig {
@@ -45,8 +37,7 @@ const SERVICE_CONFIG_QUERY = `
 `;
 
 // ---------------------------------------------------------------------------
-// config_get -- Go ref: tools_config.go::tenantConfigTools (lines 13-41)
-//   + ops/service_config_remote.go::RemoteGetServiceConfig (lines 75-96)
+// config_get
 // ---------------------------------------------------------------------------
 
 export const config_get: RegisteredTool = {

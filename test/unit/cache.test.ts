@@ -97,7 +97,7 @@ test('cache_stats_my: returns zero-valued row when myCacheStats is null', async 
   }
 });
 
-test('cache_stats_my: tool metadata matches Go reference', () => {
+test('cache_stats_my: tool metadata matches the tenant tool spec', () => {
   assert.equal(cache_stats_my.name, 'cache_stats_my');
   assert.equal(cache_stats_my.minRole, 'read');
   assert.ok(!cache_stats_my.modifiesResource);

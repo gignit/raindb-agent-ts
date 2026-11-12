@@ -1,8 +1,8 @@
 // smoke.test.ts -- the public-API contract test.
 //
 // This is the test that breaks when someone accidentally
-// removes/renames an export. Hosts (fdn-app, raindb-app) bind to
-// the names checked here; treat any failure as a breaking change.
+// removes/renames an export. Host applications bind to the names
+// checked here; treat any failure as a breaking change.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -39,7 +39,7 @@ test('public API exports the GraphQL client', () => {
 });
 
 test('public API exports the model resolver', () => {
-  // Note: makeRaindbAiClient was removed in the goja-host-adapter
+  // Note: makeRaindbAiClient was removed in the host-adapter
   // refactor. Callers that need a chat completion now call
   // ctx.host.chatCompletion(req); the Node host (makeNodeHost)
   // wraps openai-node internally.

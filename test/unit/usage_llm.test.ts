@@ -340,7 +340,7 @@ test('llm_usage_report_summary: days=0 means all-time (no date filter)', async (
 // Metadata parity
 // ---------------------------------------------------------------------------
 
-test('usage + llm tools: metadata matches Go reference', () => {
+test('usage + llm tools: metadata matches the tenant tool spec', () => {
   assert.equal(usage_list.minRole, 'read');
   assert.ok(!usage_list.modifiesResource);
   assert.equal(usage_summary.minRole, 'read');

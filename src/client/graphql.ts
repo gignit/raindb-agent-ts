@@ -1,14 +1,13 @@
-// graphql.ts -- minimal GraphQL HTTP client for raindb-api.
+// graphql.ts -- minimal GraphQL HTTP client for the RainDB API.
 //
-// Extracted from fdn-app/server/src/raindb.ts::graphqlRequest.
 // Single responsibility: POST a query + variables to the configured
-// raindb-api endpoint, send the tenant API key header, parse the
+// RainDB API endpoint, send the tenant API key header, parse the
 // response, surface errors as RaindbError. Nothing else.
 //
 // The package never reads process.env directly. Every call MUST
 // pass GraphQLOptions with at least an apiKey + endpoint; hosts
-// resolve those from their own auth surface (fdn-app from
-// resolveProjectCreds, raindb-app from session-derived creds, etc.).
+// resolve those from their own auth surface (Node consumers from
+// their project creds, session-derived creds, etc.).
 //
 // Transport indirection: the optional `host` parameter routes the
 // HTTP call through `host.fetch`. When omitted, the Node default is
@@ -63,7 +62,7 @@ export class RaindbError extends Error {
 }
 
 /**
- * Execute a GraphQL operation against raindb-api.
+ * Execute a GraphQL operation against the RainDB API.
  *
  * The `creds` argument carries the tenant API key + endpoint
  * resolved by the host. Both fields are required at call time;
@@ -73,7 +72,7 @@ export class RaindbError extends Error {
  * The `host` argument is optional for backward compatibility. When
  * passed (the normal path from tools that read `ctx.host`), the
  * HTTP call routes through it. When omitted, a Node host is built
- * inline from `creds` -- works in Node, throws in goja sandboxes
+ * inline from `creds` -- works in Node, throws in the bolt sandbox
  * because openai-node can't load. Always pass host from a
  * ToolContext when one exists.
  *

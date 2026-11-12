@@ -1,9 +1,7 @@
 // chain.ts -- agent tools for reverse-index chain inspection.
 //
-// Mirrors raindb-phoenix-lightning/internal/ai/tools_chain.go::
-// tenantChainTools (and the equivalent CLI verbs:
-// raindb-cli chain status / cardinality / audit). Three read-only
-// queries against the raindb-api GraphQL surface.
+// Three read-only queries against the RainDB API GraphQL surface
+// (equivalent CLI verbs: raindb-cli chain status / cardinality / audit).
 //
 // When to use: any time the agent is reasoning about a formation
 // index that declares orderByDesc:true (the per-index opt-in for
@@ -30,7 +28,7 @@ import { boolArg, stringArg } from '../registry/build.js';
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror pkg/sdk + pkg/types chain shapes 1:1)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface ChainCardinality {
@@ -91,8 +89,8 @@ export interface ChainAudit {
 }
 
 // ---------------------------------------------------------------------------
-// GraphQL queries (constants; selection sets mirror internal/ops/chain.go's
-// query bodies field-for-field so a parity test can byte-compare them)
+// GraphQL queries (constants; selection set field order is stable so a
+// parity test can byte-compare them)
 // ---------------------------------------------------------------------------
 
 const CHAIN_STATUS_QUERY = `
@@ -166,8 +164,7 @@ function chainTargetForQuery(t: ChainTargetArgs): Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// chain_status -- Go ref: internal/ai/tools_chain.go::tenantChainTools
-//   + internal/ops/chain.go::ChainStatusOp
+// chain_status
 // ---------------------------------------------------------------------------
 
 export const chain_status: RegisteredTool = {
@@ -219,7 +216,7 @@ export const chain_status: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// chain_cardinality -- Go ref: tools_chain.go + ops/chain.go::ChainCardinalityOp
+// chain_cardinality
 // ---------------------------------------------------------------------------
 
 export const chain_cardinality: RegisteredTool = {
@@ -259,7 +256,7 @@ export const chain_cardinality: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// chain_audit -- Go ref: tools_chain.go + ops/chain.go::ChainAuditOp
+// chain_audit
 // ---------------------------------------------------------------------------
 
 export const chain_audit: RegisteredTool = {

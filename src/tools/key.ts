@@ -1,6 +1,5 @@
 // key.ts -- agent tools for tenant API-key management.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_key.go::tenantKeyTools.
 // 3 tools: key_list (read), key_create (admin/mutating; returns
 // the plaintext secret EXACTLY ONCE), key_revoke (admin/mutating;
 // irreversible).
@@ -14,7 +13,7 @@ import {
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror internal/ops/key.go)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface APIKeyInfo {
@@ -25,7 +24,7 @@ export interface APIKeyInfo {
   // createdAt/expiresAt/lastUsedAt are the GraphQL Time! scalar, which
   // serializes as a Unix-MILLISECONDS NUMBER (not an ISO string). Decoding
   // them as `string` silently mistypes the value. createdBy is String! on the
-  // wire (always present). Reconciled against raindb-prime model.APIKeyInfo.
+  // wire (always present).
   createdAt: number;
   expiresAt?: number | null;
   createdBy: string;
@@ -48,7 +47,7 @@ export interface CreateKeyResult {
 export interface RevokeKeyResult {
   apiClientId: string;
   // revokedAt is the GraphQL Time! scalar -> Unix-MILLISECONDS NUMBER, not an
-  // ISO string. Reconciled against raindb-prime model.RevokeAPIKeyResult.
+  // ISO string.
   revokedAt: number;
 }
 
@@ -101,8 +100,7 @@ const REVOKE_API_KEY_MUTATION = `
 `;
 
 // ---------------------------------------------------------------------------
-// key_list -- Go ref: tools_key.go (lines 22-39)
-//   + ops/key.go::ListKeys (lines 62-80)
+// key_list
 // ---------------------------------------------------------------------------
 
 export const key_list: RegisteredTool = {
@@ -134,13 +132,11 @@ export const key_list: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// key_create -- Go ref: tools_key.go (lines 40-63)
-//   + ops/key.go::CreateKey (lines 85-105)
+// key_create
 //
-// minRole=admin per the M2 checklist (key minting is sensitive).
-// Returns the plaintext secret in `apiKey` -- callers MUST capture
-// it immediately; the server-side store hashes it and never
-// surfaces it again.
+// minRole=admin (key minting is sensitive). Returns the plaintext
+// secret in `apiKey` -- callers MUST capture it immediately; the
+// server-side store hashes it and never surfaces it again.
 // ---------------------------------------------------------------------------
 
 export const key_create: RegisteredTool = {
@@ -191,8 +187,7 @@ export const key_create: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// key_revoke -- Go ref: tools_key.go (lines 64-85)
-//   + ops/key.go::RevokeKey (lines 108-122)
+// key_revoke
 // ---------------------------------------------------------------------------
 
 export const key_revoke: RegisteredTool = {

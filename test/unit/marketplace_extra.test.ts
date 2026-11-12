@@ -1,7 +1,7 @@
 // marketplace_extra.test.ts -- pack_info, pack_get, pack_features,
-// vendor_list, vendor_info tool tests. Phase 6 refactor: all tools
-// fetch from raindb-app's /api/marketplace/* REST endpoint instead
-// of raindb-api GraphQL.
+// vendor_list, vendor_info tool tests. All marketplace tools fetch
+// from the RainDB marketplace REST endpoint (/api/marketplace/*),
+// not the GraphQL API.
 //
 // pack_list has its own test file (pack_list.test.ts).
 
@@ -369,7 +369,7 @@ test('vendor_info: 404 surfaces as friendly error', async () => {
 // metadata parity
 // ---------------------------------------------------------------------------
 
-test('marketplace tools: metadata matches Go reference', () => {
+test('marketplace tools: metadata matches the tenant tool spec', () => {
   assert.equal(pack_info.name, 'pack_info');
   assert.equal(pack_info.minRole, 'read');
   assert.deepEqual(pack_info.parameters.required, ['vendor', 'packName']);

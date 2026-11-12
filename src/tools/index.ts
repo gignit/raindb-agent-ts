@@ -1,17 +1,16 @@
 // tools/index.ts -- per-domain catalogs + the aggregated
 // `tenantTools` table.
 //
-// Hosts compose their own tool array. fdn-app keeps its product
-// tools (fdn_search, fdn_get_document, etc.) in its own repo and
-// concatenates `tenantTools` to the end:
+// Host applications compose their own tool array. A host keeps its
+// product tools (fdn_search, fdn_get_document, etc.) in its own
+// repo and concatenates `tenantTools` to the end:
 //
 //   const ALL_TOOLS = [...fdnProductTools, ...tenantTools];
 //
-// raindb-app does the same with its own platform-admin tools.
+// Node consumers do the same with their own platform-admin tools.
 //
-// The aggregator mirrors raindb-phoenix-oc/internal/ai/tools.go::
-// tenantToolTable (lines 83-100) -- same domain order so the
-// model sees a stable surface across Go + TS.
+// The aggregator keeps a stable domain order so the model sees a
+// consistent surface.
 
 import { cacheTools } from './cache.js';
 import { catalogTools } from './catalog.js';
@@ -202,25 +201,23 @@ export {
 } from './index_page.js';
 
 /**
- * The full tenant tool table. Mirrors the Go aggregator's order so
- * the surface is identical across raindb-cli and the TS portals.
+ * The full tenant tool table. Uses a stable domain order so the
+ * surface is identical across raindb-cli and Node consumers.
  *
- * Domain order (from raindb-phoenix-oc/internal/ai/tools.go::
- * tenantToolTable):
+ * Domain order:
  *   droplet, catalog, entity, sql, formation, cache, periscope,
  *   key, config, usage, relay, digest, llm, marketplace, chain,
  *   index_page.
  *
- * chain + index_page are TS-side additions that mirror the
- * raindb-phoenix-lightning chain inspection + read surface
- * (added alongside the orderByDesc:true machinery -- see
- * docs/RAINDB_PATTERNS.md "Newest-First Lists + Polling Updates").
+ * chain + index_page are the chain inspection + read surface,
+ * added alongside the orderByDesc:true machinery -- see
+ * docs/RAINDB_PATTERNS.md "Newest-First Lists + Polling Updates".
  */
 export const tenantTools: RegisteredTool[] = [
   ...dropletTools,
   ...catalogTools,
   ...entityTools,
-  ...queryTools, // sql_execute + vector_search (Go's "sqlTools")
+  ...queryTools, // sql_execute + vector_search
   ...formationTools,
   ...cacheTools,
   ...periscopeTools,

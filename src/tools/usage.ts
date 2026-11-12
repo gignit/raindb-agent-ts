@@ -1,17 +1,15 @@
 // usage.ts -- agent tools for tenant usage events + summary.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_usage.go::tenantUsageTools.
 // 2 tenant-scoped tools (admin *_all variants excluded). Both run
 // via the executeSQL GraphQL query against the platform_usage_event
-// formation -- mirrors ops/usage.go::UsageList +
-// ops/usage.go::UsageSummary.
+// formation.
 
 import { executeSQL } from '../client/sql.js';
 import { intArg, stringArg } from '../registry/build.js';
 import type { RegisteredTool } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror internal/ops/usage.go)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface UsageEvent {
@@ -34,16 +32,15 @@ export interface UsageSummaryRow {
 }
 
 // usageDedup: ROW_NUMBER over eventId DESC by ts so we drop
-// duplicate events kept around from idempotent retries. Verbatim
-// from internal/ops/usage.go::usageDedup.
+// duplicate events kept around from idempotent retries.
 const USAGE_DEDUP = `(
   SELECT *, ROW_NUMBER() OVER (PARTITION BY eventId ORDER BY ts DESC) AS rn
   FROM entity."platform_usage_event"
 ) sub`;
 
 // validateUsageIdent guards SQL identifiers passed in the WHERE
-// clause. The Go side (ops/usage.go::validateUsageIdent) accepts
-// only [A-Za-z0-9_-]+. Empty is allowed (means no filter).
+// clause. Accepts only [A-Za-z0-9_-]+. Empty is allowed (means no
+// filter).
 function validateUsageIdent(field: string, value: string): string | null {
   if (value === '') return null;
   if (!/^[A-Za-z0-9_-]+$/.test(value)) {
@@ -66,8 +63,7 @@ function usageWhereClause(service: string, dimension: string): string {
 const DEFAULT_USAGE_LIST_LIMIT = 100;
 
 // ---------------------------------------------------------------------------
-// usage_list -- Go ref: tools_usage.go (lines 19-41)
-//   + ops/usage.go::UsageList (lines 201-242)
+// usage_list
 // ---------------------------------------------------------------------------
 
 export const usage_list: RegisteredTool = {
@@ -123,8 +119,7 @@ export const usage_list: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// usage_summary -- Go ref: tools_usage.go (lines 42-60)
-//   + ops/usage.go::UsageSummary (lines 245-281)
+// usage_summary
 // ---------------------------------------------------------------------------
 
 export const usage_summary: RegisteredTool = {

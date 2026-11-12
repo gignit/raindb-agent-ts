@@ -1,6 +1,5 @@
 // relay.ts -- agent tools for relay observability.
 //
-// Mirrors raindb-phoenix-oc/internal/ai/tools_relay.go::tenantRelayTools.
 // 6 tools, all read-only:
 //
 //   relay_queue   -- list active relays in a queue formation (S3
@@ -21,7 +20,7 @@ import { stringArg } from '../registry/build.js';
 import type { RegisteredTool, ToolArgs } from '../registry/types.js';
 
 // ---------------------------------------------------------------------------
-// Wire shapes (mirror internal/ops/relay.go)
+// Wire shapes.
 // ---------------------------------------------------------------------------
 
 export interface RelayAddress {
@@ -80,7 +79,7 @@ export interface RelayQueueEntry {
   tokenKey: string;
   // Sourced from GraphQL listKeys -> KeyEntry.lastModified, the Time! scalar ->
   // a Unix-MILLISECONDS NUMBER on the wire (NOT the CLI `droplet keys` display
-  // string). Reconciled against raindb-prime model KeyEntry.
+  // string). Reconciled against RainDB model KeyEntry.
   lastModified: number;
 }
 
@@ -189,9 +188,8 @@ async function readRelay(
 }
 
 function summaryFromResult(r: RelayResult): RelayStatusSummary {
-  // Mirrors ops/relay.go::summaryFromResult. Status, formation,
-  // entity, relayType pulled from the result; details may carry
-  // attempt + timestamps.
+  // Status, formation, entity, relayType pulled from the result;
+  // details may carry attempt + timestamps.
   const details = r.details ?? {};
   return {
     relayId: r.relayId,
@@ -210,8 +208,7 @@ function summaryFromResult(r: RelayResult): RelayStatusSummary {
 }
 
 // ---------------------------------------------------------------------------
-// relay_queue -- Go ref: tools_relay.go (lines 16-39)
-//   + ops/relay.go::RelayQueueList (lines 525-559)
+// relay_queue
 //
 // Walks listKeys against the relay-queue-token prefix:
 // `relays/queue/<queueFormation>/<formationFilter>/...` and parses
@@ -242,9 +239,8 @@ export const relay_queue: RegisteredTool = {
     }
     const formationFilter = stringArg(args, 'formationFilter');
     // Queue tokens live under the by-formation index, NOT relays/queue/. This is
-    // the canonical tenant-relative prefix from raindb-prime
-    // pkg/paths.RelayQueueTokenRelPrefix (indexes/<queueFormation>/by-formation/
-    // [<formationFilter>/]), consumed by internal/ops.RelayQueueList. The prior
+    // the canonical tenant-relative prefix
+    // indexes/<queueFormation>/by-formation/[<formationFilter>/]. The prior
     // relays/queue/<f>/ prefix matched nothing, so relay_queue always returned []
     // (a shipped-tool defect the tsdk relay_queue live test surfaced).
     let prefix = `indexes/${queueFormation}/by-formation/`;
@@ -269,7 +265,7 @@ export const relay_queue: RegisteredTool = {
       if (!data.listKeys.hasMore || !data.listKeys.nextCursor) break;
       cursor = data.listKeys.nextCursor;
     }
-    // Project keys to entries. Mirrors ops/relay.go:540-557.
+    // Project keys to entries.
     const entries: RelayQueueEntry[] = [];
     for (const { key, lastModified } of allEntries) {
       const parts = key.split('/');
@@ -290,8 +286,7 @@ export const relay_queue: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// relay_status -- Go ref: tools_relay.go (lines 40-55)
-//   + ops/relay.go::RelayStatus (lines 414-420)
+// relay_status
 // ---------------------------------------------------------------------------
 
 export const relay_status: RegisteredTool = {
@@ -313,8 +308,7 @@ export const relay_status: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// relay_inspect -- Go ref: tools_relay.go (lines 56-71)
-//   + ops/relay.go::RelayInspect (lines 427-447)
+// relay_inspect
 // ---------------------------------------------------------------------------
 
 export const relay_inspect: RegisteredTool = {
@@ -336,8 +330,7 @@ export const relay_inspect: RegisteredTool = {
       logIds: result.logIds,
       details: result.details,
     };
-    // Extract subTasks from details if present (mirrors Go op
-    // lines 438-444).
+    // Extract subTasks from details if present.
     const details = result.details;
     if (details && Array.isArray((details as Record<string, unknown>)['subTasks'])) {
       view.subTasks = (details as Record<string, unknown>)['subTasks'] as string[];
@@ -347,8 +340,7 @@ export const relay_inspect: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// relay_logs -- Go ref: tools_relay.go (lines 72-87)
-//   + ops/relay.go::RelayLogs (lines 459-472)
+// relay_logs
 //
 // Two-step: first read to get logIds, then read again with
 // logIds passed back to fetch the full log entries.
@@ -377,8 +369,7 @@ export const relay_logs: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// relay_tree -- Go ref: tools_relay.go (lines 88-103)
-//   + ops/relay.go::RelayTree (lines 478-480)
+// relay_tree
 // ---------------------------------------------------------------------------
 
 export const relay_tree: RegisteredTool = {
@@ -400,8 +391,7 @@ export const relay_tree: RegisteredTool = {
 };
 
 // ---------------------------------------------------------------------------
-// relay_entity -- Go ref: tools_relay.go (lines 104-126)
-//   + ops/relay.go::RelayListForEntity (lines 487-514)
+// relay_entity
 //
 // Walks listKeys against the relay base prefix
 // `relays/<formation>/<entityId>/` and projects each unique
@@ -443,8 +433,7 @@ export const relay_entity: RegisteredTool = {
         };
       }>(LIST_KEYS_QUERY, { input }, ctx.creds, ctx.host);
       for (const k of data.listKeys.keys ?? []) {
-        // Path layout (verified via paths.RelayBaseRelPath +
-        // surrounding code): relays/<formation>/<entityId>/<relayId>/...
+        // Path layout: relays/<formation>/<entityId>/<relayId>/...
         // The relayId is the segment immediately after entityId.
         const trimmed = k.key.startsWith(prefix)
           ? k.key.slice(prefix.length)

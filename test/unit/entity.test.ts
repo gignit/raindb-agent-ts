@@ -263,7 +263,7 @@ test('entity_expire: emits ExpireDroplet mutation', async () => {
   }
 });
 
-test('entity tools: metadata matches Go reference', () => {
+test('entity tools: metadata matches the tenant tool spec', () => {
   assert.equal(entity_version_history.minRole, 'read');
   assert.ok(!entity_version_history.modifiesResource);
   assert.deepEqual(entity_version_history.parameters.required, ['formation', 'scope']);

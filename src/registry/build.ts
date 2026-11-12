@@ -2,10 +2,8 @@
 // openai-spec ChatTool wire shape, plus the small arg-coercion
 // helpers every tool body uses.
 //
-// Mirrors fdn-app/server/src/services/agentTools.ts::buildToolDefs
-// and the Go arg-helper conventions in
-// raindb-phoenix-oc/internal/ai/args.go (stringArg, intArg,
-// boolArg, stringSliceArg).
+// Provides buildToolDefs and the arg-helper conventions (stringArg,
+// intArg, boolArg, stringSliceArg).
 
 import type OpenAI from 'openai';
 
@@ -92,8 +90,7 @@ export function findTool(
 
 // ---------------------------------------------------------------------------
 // Arg-coercion helpers. Tool bodies pull values defensively because
-// the LLM's args object is typed as `Record<string, unknown>`. These
-// mirror raindb-phoenix-oc/internal/ai/args.go's convenience helpers.
+// the LLM's args object is typed as `Record<string, unknown>`.
 // ---------------------------------------------------------------------------
 
 /** Coerce args[key] to a non-empty trimmed string, or "" otherwise. */

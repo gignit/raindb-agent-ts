@@ -4,25 +4,25 @@
 
 **Batch 4 landed (2026-05-09)** -- periscope. Tagged v0.4.0. **M2 COMPLETE.**
 
-  - **Periscope** (G): all 18 read-only tools (status, formation_list/describe/lint, audit, reconcile, tier_list/describe/cursor, snapshot_list/get, pool_list, sentinels_list, events_list, catalog_metadata, catalog_tree, droplet_locate/residual). Note: the M2 checklist seed initially counted 17 -- the Go side actually returns 18 from tenantPeriscopeTools (lint was tracked under the formation block in early drafts; it's a separate tool entry).
+  - **Periscope** (G): all 18 read-only tools (status, formation_list/describe/lint, audit, reconcile, tier_list/describe/cursor, snapshot_list/get, pool_list, sentinels_list, events_list, catalog_metadata, catalog_tree, droplet_locate/residual). Note: the M2 checklist seed initially counted 17 -- the reference side actually returns 18 from the periscope returner (lint was tracked under the formation block in early drafts; it's a separate tool entry).
 
-  Total batch 4: 18 new tools across 1 domain; 30 new unit tests; package now ships 70 of 70 tools (100% of non-deferred). fdn-app integration unchanged (all periscope tools are operator-tier).
+  Total batch 4: 18 new tools across 1 domain; 30 new unit tests; package now ships 70 of 70 tools (100% of non-deferred). Host application integration unchanged (all periscope tools are operator-tier).
 
 **Final M2 tally**:
   - 70 tools shipped (M1: 2 pilots; M2 batches 1-4: 68 tools)
   - 3 tools deferred (filesystem-bound: pack_install, droplet_upload, droplet_download)
   - 161 unit tests across 13 test files; all passing
   - 14 domain catalogs + tenantTools aggregator
-  - fdn-app's lifter selects 9 tools per AGENT_TOOL_PARITY.md (all P0 marketplace + P1 formation introspection + droplet_create pilot); the rest stay package-only for raindb-app's M3 portal
+  - the host application's lifter selects 9 tools per the parity audit doc (all P0 marketplace + P1 formation introspection + droplet_create pilot); the rest stay package-only for the second consumer's M3 portal
 
 **Batch 3 landed (2026-05-09)** -- catalog + query (sql/vector) + relay + digest. Tagged v0.3.0.
 
   - **Catalog** (E): catalog_list, catalog_tree, catalog_insert, catalog_update, catalog_delete, catalog_transfer. All 6 ported.
-  - **Query** (F): sql_execute, vector_search. sql_execute has a SELECT-only guard that the Go side doesn't (LLM should not write data via SQL; rejects DDL/DML keywords client-side).
-  - **Relay** (H): relay_queue, relay_status, relay_inspect, relay_logs, relay_tree, relay_entity. relay_queue + relay_entity walk listKeys directly (mirrors Go ops); the others use readRelay GraphQL.
-  - **Digest** (I): digest_list, digest_show. Mirrors Go's SynthesizeActionStatus walker -- listDroplets to enumerate entities, listKeys per entity to find root relays, readRelay tree to project stages with start/complete/duration. Generic walker; action-type-specific walkers can land later.
+  - **Query** (F): sql_execute, vector_search. sql_execute has a SELECT-only guard that the reference side doesn't (LLM should not write data via SQL; rejects DDL/DML keywords client-side).
+  - **Relay** (H): relay_queue, relay_status, relay_inspect, relay_logs, relay_tree, relay_entity. relay_queue + relay_entity walk listKeys directly (mirrors the reference ops); the others use readRelay GraphQL.
+  - **Digest** (I): digest_list, digest_show. Mirrors the reference's action-status walker -- listDroplets to enumerate entities, listKeys per entity to find root relays, readRelay tree to project stages with start/complete/duration. Generic walker; action-type-specific walkers can land later.
 
-  Total batch 3: 16 new tools across 4 domains; 34 new unit tests; package now ships 52 of ~70 tools (~74%). fdn-app integration unchanged (none of these tools are appropriate for the product surface per AGENT_TOOL_PARITY.md).
+  Total batch 3: 16 new tools across 4 domains; 34 new unit tests; package now ships 52 of ~70 tools (~74%). Host application integration unchanged (none of these tools are appropriate for the product surface per the parity audit doc).
 
 **M2 remaining**: periscope (17 tools, all read-only) + droplet_upload/download (deferred per filesystem note).
 
@@ -36,40 +36,40 @@
 
   Total batch 2: 25 new tools; 43 new unit tests.
 
-**Batch 1 landed (2026-05-09)** -- read-heavy low-risk domains, fully tested + lifted into fdn-app:
+**Batch 1 landed (2026-05-09)** -- read-heavy low-risk domains, fully tested + lifted into the host application:
 
   - **Marketplace** (J): pack_info, pack_get, pack_features, vendor_list, vendor_info ported. pack_install deferred (filesystem-bound CLI primitive). Marketplace surface now complete except pack_install.
   - **Formation** (D): formation_list, formation_describe, formation_publish. All three.
   - **Cache** (O): cache_stats_my. Single tool; only tenant-scoped variant ported.
-  - **Config** (N): config_get. Single tool. (Earlier checklist drafts mentioned config_list + config_set but they don't exist on the Go tenant tool table; removed from scope.)
+  - **Config** (N): config_get. Single tool. (Earlier checklist drafts mentioned config_list + config_set but they don't exist on the reference tenant tool table; removed from scope.)
 
-  Total batch 1: 9 new tools across 4 domains; 35 new unit tests; package now ships 11 tools (M1's pack_list + droplet_create + batch 1's 9). fdn-app's lifter brings 8 of these onto its product surface (formation_publish kept admin-only on the shared package, not lifted into fdn-app per AGENT_TOOL_PARITY.md).
+  Total batch 1: 9 new tools across 4 domains; 35 new unit tests; package now ships 11 tools (M1's pack_list + droplet_create + batch 1's 9). The host application's lifter brings 8 of these onto its product surface (formation_publish kept admin-only on the shared package, not lifted into the host application per the parity audit doc).
 
 **M2 remaining domains**: catalog, entity, query (sql+vector), periscope, relay, digest, llm, usage, key, plus droplet read-side (8 of 12 tools). See per-domain sections for the per-tool checklist.
 
 ---
 
-M2 is mechanical bulk-port of the remaining ~68 tenant tools from `raindb-phoenix-oc/internal/ai/tools_*.go` into this package's `src/tools/<domain>.ts`.
+M2 is mechanical bulk-port of the remaining ~68 tenant tools from the RainDB platform tool definitions into this package's `src/tools/<domain>.ts`.
 
 **Why a checklist instead of a single big PR**: tools port one-at-a-time. Doing all 68 in one pass without per-tool tests means breakage compounds; doing them with tests as you go means each green test is a checkpoint. The scaffold + 2 pilots (M1) are already proven; M2 is just running the same template per tool.
 
 **Per-tool work loop**:
 
-  1. Read the Go reference via `coder_go_function selector="^<ToolNameTools>$"` (the returner) for context.
+  1. Read the reference via a coder query on the returner function `^<ToolNameTools>$` for context.
   2. Locate the specific tool entry by name within the returner body.
-  3. Read the ops function it calls: `coder_go_function selector="^<OpsFn>$"` to see GraphQL operation + result shape.
-  4. Read the result struct: `coder_go_type selector="^<ResultType>$"` to know what to project.
+  3. Read the operation function it calls: coder query `^<OpsFn>$` to see the GraphQL operation + result shape.
+  4. Read the result struct: coder query `^<ResultType>$` to know what to project.
   5. Translate to TypeScript in `src/tools/<domain>.ts`. Match name + parameters + ModifiesResource flag exactly.
   6. Add a unit test in `test/unit/<tool_name>.test.ts` (or a domain-bundled test file when the tools are tightly related).
   7. Update domain section state to `done` when the test passes.
 
 **Domain ordering**: do read-heavy + low-cost domains first (config, cache, formation list/describe, marketplace remaining), then mid-tier (entity, relay, digest, llm, usage, key), then heavy (droplet, catalog, periscope, query). The high-value-per-line-of-code domains land first; periscope last because it has 17 tools and is the riskiest if the wire shape needs a fix.
 
-**Live verification cadence**: after each 2-3 domains land, restart fdn-app and smoke-test one representative tool from each new domain in the chat UI. Catches schema drift early.
+**Live verification cadence**: after each 2-3 domains land, restart the host application and smoke-test one representative tool from each new domain in the chat UI. Catches schema drift early.
 
-**Concurrent-edit awareness**: another agent is editing `raindb-api` and `raindb-app`. If a GraphQL operation fails unexpectedly during M2 verification, first run `coder_go_function selector="^<OpsFn>$"` against fresh `raindb-phoenix-oc` to see if the schema selection set changed -- the fix is usually a 2-line update to the TS query string.
+**Concurrent-edit awareness**: another agent is editing the RainDB API and the second consumer. If a GraphQL operation fails unexpectedly during M2 verification, first re-read the operation function against a fresh RainDB platform checkout to see if the schema selection set changed -- the fix is usually a 2-line update to the TS query string.
 
-**Sections B-O** carry one entry per tool, each marked `pending` until ported. Mark a tool `in-progress` when you start it, `done` when its test passes against mocked GraphQL, and `deferred` if there's a Go-side issue that blocks it (note the issue inline).
+**Sections B-O** carry one entry per tool, each marked `pending` until ported. Mark a tool `in-progress` when you start it, `done` when its test passes against mocked GraphQL, and `deferred` if there's a reference-side issue that blocks it (note the issue inline).
 
 **Section P** tracks the aggregator updates -- `tools/index.ts` and `src/index.ts` need a new entry every time a domain lands.
 
@@ -79,31 +79,31 @@ M2 is mechanical bulk-port of the remaining ~68 tenant tools from `raindb-phoeni
 
 # Domain droplet
 
-**File**: `src/tools/droplet.ts` (extend existing). **Go ref**: `internal/ai/tools_droplet.go::tenantDropletTools`. **Ops**: `internal/ops/droplet.go` + `ops/upload.go`.
+**File**: `src/tools/droplet.ts` (extend existing). **Reference**: the tenant droplet returner + droplet/upload operations.
 
 12 tools. `droplet_create` shipped in M1 -- mark `done`. The remaining 11 land here.
 
-**Audit-doc note**: AGENT_TOOL_PARITY.md flags droplet primitives as 'do NOT port' for fdn-app's product surface. raindb-app's portal SHOULD expose them (operators expect raw RainDB). The shared package builds them all; fdn-app's lifter (agentToolsShared.ts) opts out of all but `droplet_create` (the M1 pilot, also slated for removal in M2 once the pilot's verified the modifiesResource path).
+**Audit-doc note**: the parity audit flags droplet primitives as 'do NOT port' for the host application's product surface. The second consumer's portal SHOULD expose them (operators expect raw RainDB). The shared package builds them all; the host application's lifter opts out of all but `droplet_create` (the M1 pilot, also slated for removal in M2 once the pilot's verified the modifiesResource path).
 
 ## droplet_read_current
 
-Read the current droplet for (formation, scope). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ReadCurrent`. **Required**: `formation`, `scope`.
+Read the current droplet for (formation, scope). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`, `scope`.
 
 ## droplet_read_by_id
 
-Read a specific droplet by UUID. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ReadDroplet`. **Required**: `formation`, `id`.
+Read a specific droplet by UUID. Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`, `id`.
 
 ## droplet_read_latest
 
-Read via index lookup (e.g. by-id-latest, by-email-latest). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ReadLatest`. **Required**: `formation`, `index`, `value`.
+Read via index lookup (e.g. by-id-latest, by-email-latest). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`, `index`, `value`.
 
 ## droplet_list
 
-List structured droplet rows under a formation prefix. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ListDroplets`. **Required**: `formation`. **Optional**: `prefix`, `pageSize` (default 100).
+List structured droplet rows under a formation prefix. Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`. **Optional**: `prefix`, `pageSize` (default 100).
 
 ## droplet_keys
 
-List raw S3 keys under a tenant-relative prefix (debugging tool). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ListAllKeys`. **Required**: `prefix`.
+List raw S3 keys under a tenant-relative prefix (debugging tool). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `prefix`.
 
 ## droplet_create
 
@@ -111,15 +111,15 @@ Shipped in M1. **State**: done.
 
 ## droplet_update
 
-Read-modify-write a droplet with CAS retry. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.ReadModifyWrite`. **Required**: `formation`, `scope`, `changes`.
+Read-modify-write a droplet with CAS retry. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scope`, `changes`.
 
 ## droplet_push_public
 
-Mirror a private droplet's float fields to the public bucket. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.PushPublic`. **Required**: `formation`, `dropletId`.
+Mirror a private droplet's float fields to the public bucket. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `dropletId`.
 
 ## droplet_upload
 
-**Decision: SKIP for the shared package in M2**. The Go reference reads `filePath` from the API host's local filesystem -- portal hosts have no operator filesystem. The base64 `fileData` path COULD work but is awkward at LLM-message scale (binary data in chat history). Defer until host-specific upload semantics settle. Mark `deferred`.
+**Decision: SKIP for the shared package in M2**. The reference reads `filePath` from the API host's local filesystem -- portal hosts have no operator filesystem. The base64 `fileData` path COULD work but is awkward at LLM-message scale (binary data in chat history). Defer until host-specific upload semantics settle. Mark `deferred`.
 
 ## droplet_download
 
@@ -127,235 +127,235 @@ Mirror a private droplet's float fields to the public bucket. Mutating. **minRol
 
 ## droplet_bulk_create
 
-Create multiple droplets in one call. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.BulkCreateDroplets`. **Required**: `formation` + one of `entries` (array) or `filePath`. Skip the `filePath` arm here (filesystem-only); accept only `entries`.
+Create multiple droplets in one call. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation` + one of `entries` (array) or `filePath`. Skip the `filePath` arm here (filesystem-only); accept only `entries`.
 
 ## droplet_bulk_update
 
-Update multiple droplets in one call (per-entry CAS retry). Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.BulkUpdateDroplets`. **Required**: `formation`, `scopeKey`, `entries`. Skip `filePath` for the same reason.
+Update multiple droplets in one call (per-entry CAS retry). Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scopeKey`, `entries`. Skip `filePath` for the same reason.
 
 # Domain entity
 
-**File**: `src/tools/entity.ts` (new). **Go ref**: `internal/ai/tools_entity.go::tenantEntityTools`. **Ops**: `internal/ops/entity.go`.
+**File**: `src/tools/entity.ts` (new). **Reference**: the tenant entity returner + entity operations.
 
 6 tools.
 
 ## entity_version_history
 
-List every version of an entity (newest first). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.EntityVersionHistory`. **Required**: `formation`, `scopeValue`.
+List every version of an entity (newest first). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`, `scopeValue`.
 
 ## entity_tag
 
-Attach a tag to an entity. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.EntityTag`. **Required**: `formation`, `scopeValue`, `tag`.
+Attach a tag to an entity. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scopeValue`, `tag`.
 
 ## entity_untag
 
-Remove a tag. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.EntityUntag`. **Required**: `formation`, `scopeValue`, `tag`.
+Remove a tag. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scopeValue`, `tag`.
 
 ## entity_mark_for_expiration
 
-Schedule an entity for soft-delete. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.EntityMarkForExpiration`. **Required**: `formation`, `scopeValue`, `expireAt`.
+Schedule an entity for soft-delete. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scopeValue`, `expireAt`.
 
 ## entity_cancel_expiration
 
-Unschedule a pending expiration. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.EntityCancelExpiration`. **Required**: `formation`, `scopeValue`.
+Unschedule a pending expiration. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scopeValue`.
 
 ## entity_expire
 
-Force-expire an entity now (skip the scheduler). Mutating. **minRole**: `admin` (destructive shortcut). **modifiesResource**: true. **Go ref op**: `ops.EntityExpire`. **Required**: `formation`, `scopeValue`.
+Force-expire an entity now (skip the scheduler). Mutating. **minRole**: `admin` (destructive shortcut). **modifiesResource**: true. **Required**: `formation`, `scopeValue`.
 
 # Domain formation
 
-**File**: `src/tools/formation.ts` (new). **Go ref**: `internal/ai/tools_formation.go::tenantFormationTools`. **Ops**: `internal/ops/formation.go`.
+**File**: `src/tools/formation.ts` (new). **Reference**: the tenant formation returner + formation operations.
 
 3 tools.
 
 ## formation_list
 
-List formations available to the tenant. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ListFormations`.
+List formations available to the tenant. Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 ## formation_describe
 
-Full formation definition (config + JSON schema + indexes + tier policy + float config). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.DescribeFormation`. **Required**: `formation`.
+Full formation definition (config + JSON schema + indexes + tier policy + float config). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`.
 
 ## formation_publish
 
-Publish a new formation config + schema. Mutating. **minRole**: `admin`. **modifiesResource**: true. **Go ref op**: `ops.PublishFormation`. **Required**: `formationId`, `config`, `schema`, `schemaVersion`.
+Publish a new formation config + schema. Mutating. **minRole**: `admin`. **modifiesResource**: true. **Required**: `formationId`, `config`, `schema`, `schemaVersion`.
 
 # Domain catalog
 
-**File**: `src/tools/catalog.ts` (new). **Go ref**: `internal/ai/tools_catalog.go::tenantCatalogTools`. **Ops**: `internal/ops/catalog.go`.
+**File**: `src/tools/catalog.ts` (new). **Reference**: the tenant catalog returner + catalog operations.
 
-6 tools. Catalog is RainDB's hierarchical-index primitive (the foundation under fdn-folders).
+6 tools. Catalog is RainDB's hierarchical-index primitive (the foundation under folder features).
 
 ## catalog_list
 
-Flat list of catalog entries under a scope. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.CatalogList`. **Required**: `formation`. **Optional**: `scopeValue`, `pageSize`.
+Flat list of catalog entries under a scope. Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`. **Optional**: `scopeValue`, `pageSize`.
 
 ## catalog_tree
 
-Hierarchical tree view of catalog entries (depth-bounded). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.CatalogTree`. **Required**: `formation`. **Optional**: `catalogScopeValue`, `maxDepth`.
+Hierarchical tree view of catalog entries (depth-bounded). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`. **Optional**: `catalogScopeValue`, `maxDepth`.
 
 ## catalog_insert
 
-Insert a new catalog entry under a parent scope. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.CatalogInsert`. **Required**: `formation`, `scopeValue`, `entry`.
+Insert a new catalog entry under a parent scope. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scopeValue`, `entry`.
 
 ## catalog_update
 
-Update an existing catalog entry. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.CatalogUpdate`. **Required**: `formation`, `scopeValue`, `changes`.
+Update an existing catalog entry. Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scopeValue`, `changes`.
 
 ## catalog_delete
 
-Delete a catalog entry (with optional recursive). Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.CatalogDelete`. **Required**: `formation`, `scopeValue`. **Optional**: `recursive`.
+Delete a catalog entry (with optional recursive). Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `scopeValue`. **Optional**: `recursive`.
 
 ## catalog_transfer
 
-Move an entry between scopes (re-parent). Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.CatalogTransfer`. **Required**: `formation`, `sourceScopeValue`, `targetScopeValue`.
+Move an entry between scopes (re-parent). Mutating. **minRole**: `write`. **modifiesResource**: true. **Required**: `formation`, `sourceScopeValue`, `targetScopeValue`.
 
 # Domain query (sql + vector)
 
-**File**: `src/tools/query.ts` (new). **Go ref**: `internal/ai/tools_query.go::tenantQueryTools`. **Ops**: `internal/ops/sql.go` + `internal/ops/vector.go`.
+**File**: `src/tools/query.ts` (new). **Reference**: the tenant query returner + sql/vector operations.
 
 2 tools.
 
 ## sql_execute
 
-SQL SELECT against periscope's DuckDB executor. **minRole**: `read`. **modifiesResource**: false (per the audit doc's recommendation: enforce SELECT-only client-side; reject DDL/DML keywords before sending). **Go ref op**: `ops.ExecuteSQL`. **Required**: `query`. **Optional**: `formation` (scope to one formation's entity view).
+SQL SELECT against periscope's DuckDB executor. **minRole**: `read`. **modifiesResource**: false (per the audit doc's recommendation: enforce SELECT-only client-side; reject DDL/DML keywords before sending). **Required**: `query`. **Optional**: `formation` (scope to one formation's entity view).
 
-**Note**: the Go side has no SELECT-only guard because operators run that interactively. The TS port adds a guard inside `execute()` that rejects any non-SELECT keyword (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) -- regardless of role -- because the agent should not be writing data via SQL; writes go through tool primitives. See AGENT_TOOL_PARITY.md note.
+**Note**: the reference side has no SELECT-only guard because operators run that interactively. The TS port adds a guard inside `execute()` that rejects any non-SELECT keyword (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, REVOKE) -- regardless of role -- because the agent should not be writing data via SQL; writes go through tool primitives. See the parity audit doc note.
 
 ## vector_search
 
-Vector similarity search against an embedding-enabled formation. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.VectorSearch`. **Required**: `formation`, `query` (text). **Optional**: `topK` (default 10), `filter` (mongo-style).
+Vector similarity search against an embedding-enabled formation. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`, `query` (text). **Optional**: `topK` (default 10), `filter` (mongo-style).
 
 # Domain periscope
 
-**File**: `src/tools/periscope.ts` (new). **Go ref**: `internal/ai/tools_periscope.go::tenantPeriscopeTools`. **Ops**: `internal/ops/periscope.go`.
+**File**: `src/tools/periscope.ts` (new). **Reference**: the tenant periscope returner + periscope operations.
 
 17 tenant-scoped tools. Periscope is the SQL-plane observability surface (parquet pools + iceberg catalog + duckdb executor).
 
-**All 17 are read-only.** None set `modifiesResource: true`. Triggering pool actions on demand (`raindb-admin periscope pool trigger`) is a pending admin feature -- see fdn-app's PENDING-WORK.md section E. Land here when that ships Go-side.
+**All 17 are read-only.** None set `modifiesResource: true`. Triggering pool actions on demand (`raindb-admin periscope pool trigger`) is a pending admin feature. Land here when that ships on the reference side.
 
 **minRole** for every tool: `read`.
 
 ## periscope_status
 
-Cross-formation status overview for the tenant. **Go ref op**: `ops.PeriscopeStatus`.
+Cross-formation status overview for the tenant.
 
 ## periscope_formation_list
 
-Formations with periscope tier policies. **Go ref op**: `ops.PeriscopeFormationList`.
+Formations with periscope tier policies.
 
 ## periscope_formation_describe
 
-Full periscope config for one formation. **Go ref op**: `ops.PeriscopeFormationDescribe`. **Required**: `formation`.
+Full periscope config for one formation. **Required**: `formation`.
 
 ## periscope_formation_lint
 
-Lint a formation's tier policy for misconfiguration. **Go ref op**: `ops.PeriscopeFormationLint`. **Required**: `formation`.
+Lint a formation's tier policy for misconfiguration. **Required**: `formation`.
 
 ## periscope_audit
 
-Identify orphaned snapshot data per formation. **Go ref op**: `ops.PeriscopeAudit`. **Required**: `formation`.
+Identify orphaned snapshot data per formation. **Required**: `formation`.
 
 ## periscope_reconcile
 
-Arithmetic checks across the tier cascade for one formation. **Go ref op**: `ops.PeriscopeReconcile`. **Required**: `formation`.
+Arithmetic checks across the tier cascade for one formation. **Required**: `formation`.
 
 ## periscope_tier_list
 
-Per-tier runtime state for one formation. **Go ref op**: `ops.PeriscopeTierList`. **Required**: `formation`.
+Per-tier runtime state for one formation. **Required**: `formation`.
 
 ## periscope_tier_describe
 
-Detailed tier state (cursor, pool count, byte total, storage). **Go ref op**: `ops.PeriscopeTierDescribe`. **Required**: `formation`, `tier`.
+Detailed tier state (cursor, pool count, byte total, storage). **Required**: `formation`, `tier`.
 
 ## periscope_tier_cursor
 
-Current ingestion cursor for a tier. **Go ref op**: `ops.PeriscopeTierCursor`. **Required**: `formation`, `tier`.
+Current ingestion cursor for a tier. **Required**: `formation`, `tier`.
 
 ## periscope_snapshot_list
 
-Iceberg snapshots for a formation+tier. **Go ref op**: `ops.PeriscopeSnapshotList`. **Required**: `formation`. **Optional**: `tier`.
+Iceberg snapshots for a formation+tier. **Required**: `formation`. **Optional**: `tier`.
 
 ## periscope_snapshot_get
 
-One snapshot's full record. **Go ref op**: `ops.PeriscopeSnapshotGet`. **Required**: `formation`, `snapshotId`.
+One snapshot's full record. **Required**: `formation`, `snapshotId`.
 
 ## periscope_pool_list
 
-Parquet pool files in a tier. **Go ref op**: `ops.PeriscopePoolList`. **Required**: `formation`, `tier`.
+Parquet pool files in a tier. **Required**: `formation`, `tier`.
 
 ## periscope_sentinels_list
 
-Active + scheduled sentinels (lock state). **Go ref op**: `ops.PeriscopeSentinelsList`.
+Active + scheduled sentinels (lock state).
 
 ## periscope_events_list
 
-Scheduled periscope.pool / periscope.expire events. **Go ref op**: `ops.PeriscopeEventsList`.
+Scheduled periscope.pool / periscope.expire events.
 
 ## periscope_catalog_metadata
 
-Iceberg catalog metadata for a formation. **Go ref op**: `ops.PeriscopeCatalogMetadata`. **Required**: `formation`.
+Iceberg catalog metadata for a formation. **Required**: `formation`.
 
 ## periscope_catalog_tree
 
-Iceberg catalog tree (manifests + data files). **Go ref op**: `ops.PeriscopeCatalogTree`. **Required**: `formation`.
+Iceberg catalog tree (manifests + data files). **Required**: `formation`.
 
 ## periscope_droplet_locate
 
-Locate a dropletId in the periscope tier cascade. **Go ref op**: `ops.PeriscopeDropletLocate`. **Required**: `formation`, `dropletId`.
+Locate a dropletId in the periscope tier cascade. **Required**: `formation`, `dropletId`.
 
 ## periscope_droplet_residual
 
-Count droplets past the tier cursor (ingestion lag). **Go ref op**: `ops.PeriscopeDropletResidual`. **Required**: `formation`. **Optional**: `tier`.
+Count droplets past the tier cursor (ingestion lag). **Required**: `formation`. **Optional**: `tier`.
 
 # Domain relay
 
-**File**: `src/tools/relay.ts` (new). **Go ref**: `internal/ai/tools_relay.go::tenantRelayTools`. **Ops**: `internal/ops/relay.go`.
+**File**: `src/tools/relay.ts` (new). **Reference**: the tenant relay returner + relay operations.
 
 6 tools, all read-only (relay observability).
 
 ## relay_queue
 
-List pending + running relays. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.RelayQueue`.
+List pending + running relays. **minRole**: `read`. **modifiesResource**: false.
 
 ## relay_status
 
-Status of one relay by id (state, attempts, last error). **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.RelayStatus`. **Required**: `relayId`.
+Status of one relay by id (state, attempts, last error). **minRole**: `read`. **modifiesResource**: false. **Required**: `relayId`.
 
 ## relay_inspect
 
-Full relay record: input, output, all attempts, timing. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.RelayInspect`. **Required**: `relayId`.
+Full relay record: input, output, all attempts, timing. **minRole**: `read`. **modifiesResource**: false. **Required**: `relayId`.
 
 ## relay_logs
 
-Log lines emitted by a relay's handler invocations. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.RelayLogs`. **Required**: `relayId`.
+Log lines emitted by a relay's handler invocations. **minRole**: `read`. **modifiesResource**: false. **Required**: `relayId`.
 
 ## relay_tree
 
-Parent + child relay tree (digest extract -> chunk -> embed). **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.RelayTree`. **Required**: `relayId`.
+Parent + child relay tree (digest extract -> chunk -> embed). **minRole**: `read`. **modifiesResource**: false. **Required**: `relayId`.
 
 ## relay_entity
 
-All relays attached to one source entity (history of action invocations). **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.RelayEntity`. **Required**: `formation`, `entityId`.
+All relays attached to one source entity (history of action invocations). **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`, `entityId`.
 
 # Domain digest
 
-**File**: `src/tools/digest.ts` (new). **Go ref**: `internal/ai/tools_digest.go::tenantDigestTools`. **Ops**: `internal/ops/digest.go`.
+**File**: `src/tools/digest.ts` (new). **Reference**: the tenant digest returner + digest operations.
 
 2 tools.
 
 ## digest_list
 
-Digest pipeline status across one formation (per-document stage breakdown). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.DigestList`. **Required**: `formation`.
+Digest pipeline status across one formation (per-document stage breakdown). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`.
 
 ## digest_show
 
-Digest stage detail for one entity (extract -> chunk -> enrich-block -> embed). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.DigestShow`. **Required**: `formation`, `entityId`.
+Digest stage detail for one entity (extract -> chunk -> enrich-block -> embed). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `formation`, `entityId`.
 
 # Domain marketplace
 
-**File**: `src/tools/marketplace.ts` (extend existing). **Go ref**: `internal/ai/tools_marketplace.go::tenantMarketplaceTools`. **Ops**: `internal/ops/marketplace.go`.
+**File**: `src/tools/marketplace.ts` (extend existing). **Reference**: the tenant marketplace returner + marketplace operations.
 
 7 tools total. `pack_list` shipped in M1 -- mark `done`. The remaining 6 land here.
 
@@ -365,105 +365,105 @@ Shipped in M1. **State**: done.
 
 ## pack_info
 
-Full pack record: metadata + README + features + every file inlined. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.PackInfo`. **Required**: `vendor`, `packName`. **Optional**: `version` (empty=latest).
+Full pack record: metadata + README + features + every file inlined. Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `vendor`, `packName`. **Optional**: `version` (empty=latest).
 
 ## pack_get
 
-Alias for pack_info (CLI symmetry with `raindb-cli pack get`). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.PackGet`. Same parameter shape as pack_info.
+Alias for pack_info (CLI symmetry with `raindb-cli pack get`). Read-only. **minRole**: `read`. **modifiesResource**: false. Same parameter shape as pack_info.
 
 ## pack_features
 
-Feature options a pack exposes (cargo-style installable units). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.PackFeatures`. **Required**: `vendor`, `packName`.
+Feature options a pack exposes (cargo-style installable units). Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `vendor`, `packName`.
 
 ## pack_install
 
-**Decision: SKIP for the shared package.** The Go reference writes files to `~/.local/share/raindb/packs/...` -- that's a CLI-host primitive. Portal hosts (fdn-app, raindb-app) need a different semantic (publish formations into the tenant). Defer to a host-specific tool until product policy locks the semantic. Mark `deferred` with this rationale.
+**Decision: SKIP for the shared package.** The reference writes files to `~/.local/share/raindb/packs/...` -- that's a CLI-host primitive. Portal hosts (both consumers) need a different semantic (publish formations into the tenant). Defer to a host-specific tool until product policy locks the semantic. Mark `deferred` with this rationale.
 
 ## vendor_list
 
-List marketplace vendors. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.VendorList`. No required params.
+List marketplace vendors. Read-only. **minRole**: `read`. **modifiesResource**: false. No required params.
 
 ## vendor_info
 
-One vendor's identity record. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.VendorInfo`. **Required**: `vendorId`.
+One vendor's identity record. Read-only. **minRole**: `read`. **modifiesResource**: false. **Required**: `vendorId`.
 
 # Domain llm
 
-**File**: `src/tools/llm.ts` (new). **Go ref**: `internal/ai/tools_llm.go::tenantLLMTools`. **Ops**: `internal/ops/platform_llm.go` (the read paths). Admin variants (`llm_usage_report_reconcile`, `llm_usage_report_vendor`) excluded.
+**File**: `src/tools/llm.ts` (new). **Reference**: the tenant LLM returner + the platform LLM read paths. Admin variants (`llm_usage_report_reconcile`, `llm_usage_report_vendor`) excluded.
 
 3 tools.
 
 ## llm_provider_list
 
-List registered LLM providers. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ListLLMProviders`.
+List registered LLM providers. Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 ## llm_model_list
 
-List registered LLM models with capabilities + defaults. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ListLLMModels`.
+List registered LLM models with capabilities + defaults. Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 ## llm_usage_report_summary
 
-This tenant's LLM token + cost usage grouped by model + date. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.LLMUsageReportSummary`. **Optional**: `days` (lookback; 0=all-time, default 30).
+This tenant's LLM token + cost usage grouped by model + date. Read-only. **minRole**: `read`. **modifiesResource**: false. **Optional**: `days` (lookback; 0=all-time, default 30).
 
 # Domain usage
 
-**File**: `src/tools/usage.ts` (new). **Go ref**: `internal/ai/tools_usage.go::tenantUsageTools`. **Ops**: `internal/ops/usage.go`. Admin `*_all` variants excluded.
+**File**: `src/tools/usage.ts` (new). **Reference**: the tenant usage returner + usage operations. Admin `*_all` variants excluded.
 
 2 tools.
 
 ## usage_list
 
-List raw usage events for the tenant (paginated, optional filters). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.UsageList`.
+List raw usage events for the tenant (paginated, optional filters). Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 ## usage_summary
 
-Aggregated usage rollup (event counts, cost, by category). Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.UsageSummary`.
+Aggregated usage rollup (event counts, cost, by category). Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 # Domain key
 
-**File**: `src/tools/key.ts` (new). **Go ref**: `internal/ai/tools_key.go::tenantKeyTools`. **Ops**: `internal/ops/key.go`.
+**File**: `src/tools/key.ts` (new). **Reference**: the tenant key returner + key operations.
 
 3 tools.
 
 ## key_list
 
-List active API keys for the tenant. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ListKeys`.
+List active API keys for the tenant. Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 ## key_create
 
-Mint a new API key for the tenant. Mutating. **minRole**: `admin` (key minting is sensitive). **modifiesResource**: true. **Go ref op**: `ops.CreateKey`.
+Mint a new API key for the tenant. Mutating. **minRole**: `admin` (key minting is sensitive). **modifiesResource**: true.
 
 ## key_revoke
 
-Revoke an existing API key. Mutating. **minRole**: `admin`. **modifiesResource**: true. **Go ref op**: `ops.RevokeKey`.
+Revoke an existing API key. Mutating. **minRole**: `admin`. **modifiesResource**: true.
 
 # Domain config
 
-**File**: `src/tools/config.ts` (new). **Go ref**: `internal/ai/tools_config.go::tenantConfigTools`. **Ops**: `internal/ops/config.go`.
+**File**: `src/tools/config.ts` (new). **Reference**: the tenant config returner + config operations.
 
 3 tools.
 
 ## config_get
 
-Read a tenant service-config value. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.GetConfig`.
+Read a tenant service-config value. Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 ## config_list
 
-List all tenant service-config keys. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.ListConfig`.
+List all tenant service-config keys. Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 ## config_set
 
-Override a tenant service-config value. Mutating. **minRole**: `write`. **modifiesResource**: true. **Go ref op**: `ops.SetConfig`.
+Override a tenant service-config value. Mutating. **minRole**: `write`. **modifiesResource**: true.
 
 # Domain cache
 
-**File**: `src/tools/cache.ts` (new). **Go ref**: `internal/ai/tools_cache.go::tenantCacheTools`.
+**File**: `src/tools/cache.ts` (new). **Reference**: the tenant cache returner.
 
 1 tool. Admin variants (`cache_stats_tenant`, `cache_stats_all`) excluded -- those are admin-scoped.
 
 ## cache_stats_my
 
-Object-cache hit/miss stats for the calling tenant. Read-only. **minRole**: `read`. **modifiesResource**: false. **Go ref op**: `ops.CacheStats`.
+Object-cache hit/miss stats for the calling tenant. Read-only. **minRole**: `read`. **modifiesResource**: false.
 
 # Aggregator + exports
 
@@ -472,7 +472,7 @@ Object-cache hit/miss stats for the calling tenant. Read-only. **minRole**: `rea
 ## tools/index.ts
 
 - Import the new per-domain `<domain>Tools` array.
-- Add it to the `tenantTools` aggregator. **Order matches Go's `tenantToolTable`** (verify with `coder_go_function selector="^tenantToolTable$"`):
+- Add it to the `tenantTools` aggregator. **Order matches the reference's `tenantToolTable`** (verify by reading `^tenantToolTable$`):
   1. dropletTools
   2. catalogTools
   3. entityTools
@@ -504,12 +504,12 @@ Object-cache hit/miss stats for the calling tenant. Read-only. **minRole**: `rea
 
 Run these ONCE at the start of M2. They confirm the surfaces M2 builds against haven't drifted since M1 landed.
 
-- [ ] `coder_go_function selector="^tenantToolTable$" cwd=~/src/raindb-phoenix-oc` -- confirm the Go aggregator's domain composition matches the per-domain sections of this checklist. If a new domain landed Go-side, add a section here.
-- [ ] `coder_go_function selector="^Registration$" cwd=~/src/raindb-phoenix-oc` -- confirm `internal/ai/registry.go::Registration` still has the same field set we mirrored in `src/registry/types.ts::RegisteredTool`. Field additions on the Go side need to land here first.
-- [ ] `coder_go_type selector="^ToolParameters$|^ToolProperty$" cwd=~/src/raindb-phoenix-oc` -- confirm the schema struct fields haven't grown.
+- [ ] Read `^tenantToolTable$` in `<raindb-platform-checkout>` -- confirm the reference aggregator's domain composition matches the per-domain sections of this checklist. If a new domain landed on the reference side, add a section here.
+- [ ] Read `^Registration$` in `<raindb-platform-checkout>` -- confirm the reference `Registration` type still has the same field set we mirrored in `src/registry/types.ts::RegisteredTool`. Field additions on the reference side need to land here first.
+- [ ] Read `^ToolParameters$|^ToolProperty$` in `<raindb-platform-checkout>` -- confirm the schema struct fields haven't grown.
 - [ ] `cd ~/src/raindb-agent-ts && npm run typecheck && npm test` -- confirm M1 is still green before starting M2.
-- [ ] `cd ~/src/fdn-app/server && npm run typecheck` -- confirm fdn-app still consumes the package cleanly.
-- [ ] Live: open fdn-app's chat UI, ask "what marketplace packs are available?", verify pack_list fires + returns data. **Do not start M2 until this passes** (per the README's "stop and verify before proceeding" gate).
+- [ ] `cd <host-application-server> && npm run typecheck` -- confirm the host application still consumes the package cleanly.
+- [ ] Live: open the host application's chat UI, ask "what marketplace packs are available?", verify pack_list fires + returns data. **Do not start M2 until this passes** (per the README's "stop and verify before proceeding" gate).
 
 If any of the above fails, fix the failure first. Don't paper over schema drift by hardcoding shapes -- the wire contract is the contract.
 
@@ -518,32 +518,32 @@ If any of the above fails, fix the failure first. Don't paper over schema drift 
 **Per-tool work pattern** (every tool follows this; copy it).
 
 ```
-Step 1: Read the Go reference
-  coder_go_function selector="^<DomainTools>$" cwd=~/src/raindb-phoenix-oc
+Step 1: Read the reference
+  Query the returner function `^<DomainTools>$` in <raindb-platform-checkout>.
   -- find the entry for this tool's Name in the body. Note:
      name, description, parameters, required-list, ModifiesResource.
 
-Step 2: Read the ops function the tool calls
-  coder_go_function selector="^<OpsFn>$" cwd=~/src/raindb-phoenix-oc
+Step 2: Read the operation function the tool calls
+  Query `^<OpsFn>$` in <raindb-platform-checkout>.
   -- read the GraphQL operation string + result projection.
 
 Step 3: Read the result struct
-  coder_go_type selector="^<ResultType>$" cwd=~/src/raindb-phoenix-oc
+  Query `^<ResultType>$` in <raindb-platform-checkout>.
   -- know what fields to project in TypeScript.
 
 Step 4: Translate to TS in src/tools/<domain>.ts
   Append a new RegisteredTool const + add it to the per-domain
-  array. Match Go shape exactly:
+  array. Match the reference shape exactly:
     - Name: same string (snake_case)
-    - Description: same text (or close paraphrase if the Go side
-      uses taglines that should NOT cross over -- see G7 in
-      cliutil/README.md).
+    - Description: same text (or close paraphrase if the reference
+      side uses taglines that should NOT cross over -- see G7 in
+      the operating manual).
     - parameters: same property names + types + required-list.
-    - modifiesResource: true iff the Go side has it.
+    - modifiesResource: true iff the reference side has it.
     - minRole: 'read' for read-only, 'write' for mutating,
       'admin' for platform-scope tools (rare in tenant tools).
-  GraphQL op: build the query string verbatim from the Go ops
-  function. Mirror the selection set field-for-field.
+  GraphQL op: build the query string verbatim from the reference
+  operation function. Mirror the selection set field-for-field.
 
 Step 5: Test
   test/unit/<tool_name>.test.ts (or a domain-bundled file).
@@ -601,7 +601,7 @@ test('<toolName>: emits expected GraphQL operation', async () => {
   }
 });
 
-test('<toolName>: tool metadata matches Go reference', () => {
+test('<toolName>: tool metadata matches reference', () => {
   assert.equal(<toolName>.name, '<tool_name>');
   assert.equal(<toolName>.minRole, '<read|write|admin>');
   /* modifiesResource, parameters.required, etc. */
@@ -610,7 +610,7 @@ test('<toolName>: tool metadata matches Go reference', () => {
 
 **Common pitfalls** (saw these in M1):
 
-  - Don't pass `dir` to GET commands (`coder_go_function`, `coder_go_type`) -- they search globally by name.
+  - Don't pass `dir` to GET commands (single-symbol coder lookups) -- they search globally by name.
   - Don't use glob syntax (`handle*`) in selectors -- coder uses regex (`^handle.*`).
   - `assert.notOk` doesn't exist in node:assert/strict -- use `assert.ok(!...)`.
   - When mocking fetch, restore in a `try/finally` -- otherwise a failing test leaks the mock to subsequent tests in the same process.

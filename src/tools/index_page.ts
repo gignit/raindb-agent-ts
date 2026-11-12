@@ -1,5 +1,5 @@
 // index_page.ts -- agent tool for cursor-paginated index reads
-// (asc or desc) backed by the raindb-api ListKeys GraphQL surface.
+// (asc or desc) backed by the RainDB API ListKeys GraphQL surface.
 //
 // The canonical primitive for "newest-first page" and
 // "polling-for-new" patterns on ANY pointer index, regardless of
@@ -41,8 +41,8 @@ import type { RegisteredTool, ToolArgs } from '../registry/types.js';
 interface KeyEntry {
   key: string;
   size?: number;
-  // GraphQL KeyEntry.lastModified is the Time! scalar -> Unix-MILLISECONDS
-  // NUMBER over the wire (reconciled against raindb-prime model KeyEntry).
+  // GraphQL KeyEntry.lastModified is the Time! scalar, which
+  // serializes as a Unix-milliseconds number over the wire.
   lastModified?: number;
   etag?: string;
 }
@@ -144,9 +144,9 @@ function parseIndexPageArgs(args: ToolArgs): IndexPageArgs | string {
 }
 
 /**
- * Build the ListKeysInput shape from parsed args. raindb-api accepts
- * either the formationId+indexId form (single index lookup) or the
- * raw prefix form (partitioned index lookup -- one prefix per
+ * Build the ListKeysInput shape from parsed args. The RainDB API
+ * accepts either the formationId+indexId form (single index lookup)
+ * or the raw prefix form (partitioned index lookup -- one prefix per
  * partition). We use the prefix form because the formationId form
  * doesn't carry partitionPath today.
  */

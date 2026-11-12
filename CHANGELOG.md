@@ -4,7 +4,56 @@ All notable changes to `@raindb/agent` are documented here. The
 package follows semver post-1.0; pre-1.0 minor bumps may include
 breaking changes (rare, called out explicitly).
 
-## 0.6.0 -- goja-host-adapter
+## 0.8.0 -- RainDB wire reconciliation
+
+Reconciliation against the current RainDB GraphQL surface. The full
+wire delta since the last reconcile is additive-only -- no field the
+SDK decodes was removed or retyped (verified against every consumed
+SDL type). No breaking changes. This release ADOPTS new additive
+capabilities for parity with the RainDB CLI/MCP surface.
+
+### Added
+
+- **SQL freshness bridge.** `executeSQL` now selects + decodes
+  `SQLResult.truncated` and the per-formation `latest` freshness
+  bookmark (`FormationLatest`: `snapshotDropletId`, `snapshotKey`,
+  `snapshotAt` as Unix-MS number, `currentDropletId`, `currentKey`,
+  `indexPrefix`, `freshnessStatus`). The SQL plane is eventually
+  consistent; `latest[].freshnessStatus === 'BEHIND'` signals that
+  the snapshot predates the newest writes. Callers that need those
+  writes can optionally fetch them with `droplet_since`
+  (`after=latest[].snapshotKey`); it is never required.
+  `sql_execute` documents this. New exports: `FreshnessStatus`,
+  `FormationLatest`.
+- **`sql_execute` / `executeSQL` `planStrategy`** (`range` | `scan`)
+  -- per-query view-preparation planner override
+  (`SQLInput.planStrategy`). `executeSQL` gains an optional
+  `ExecuteSQLOptions` trailing arg (source-compatible with existing
+  positional callers).
+- **`periscope_status` `pending` flag** + in-flight fields. The tool
+  now accepts `pending: boolean` and selects `behind`,
+  `dropletsAhead`, `dropletsAheadHasMore`, `inflight`,
+  `snapshotCursor`, `currentCursor`, `sourceIndexPrefix` -- parity
+  with the MCP `periscope_status` tool.
+- **`droplet_list` `scopeValue`** passthrough
+  (`ListDropletsInput.scopeValue`) -- resolves a semantic entity
+  scope server-side before the LIST.
+
+### Changed
+
+- `formation_describe` description updated: `config` is the
+  fully-resolved config with the manifest-driven `features` section
+  (the bolted-on capabilities block was removed upstream).
+
+### Fixed
+
+- `relay_digest` unit test asserted the pre-fix `relays/queue/`
+  prefix; corrected to the shipped `indexes/<queue>/by-formation/`
+  prefix (production code was already correct since 6ad263b) and
+  updated the mock `KeyEntry.lastModified` fixtures from RFC3339
+  strings to Unix-MS numbers to match the `Time!` wire contract.
+
+## 0.6.0 -- host-adapter
 
 ### Breaking
 
@@ -77,39 +126,39 @@ breaking changes (rare, called out explicitly).
 
 - `makeRaindbAiClient` (replaced by `ctx.host.chatCompletion`).
 
-### Migration guide for the two known consumers
+### Migration guide for consumers
 
-**fdn-app** (`~/src/fdn-app`): the BFF currently imports
-`makeRaindbAiClient` from `services/agentLoop.ts`. On the
-`lightning-port` branch (the Lightning bolt port), the import is
+**Node BFF consumers**: a host application's BFF that currently
+imports `makeRaindbAiClient` from its agent-loop service should
+update the import to `makeNodeHost(creds).chatCompletion(req)`.
+When porting the same app to a Lightning bolt, the import is
 removed entirely -- the bolt host injects `host.chatCompletion`
-through the goja sandbox. On the main branch (Node BFF), update
-the import to `makeNodeHost(creds).chatCompletion(req)`.
+through the bolt sandbox.
 
-**raindb-app** (`~/src/raindb-app`): when it consumes this package
-(scheduled milestone M3), construct its `ToolContext` with
+**New consumers**: construct your `ToolContext` with
 `host: makeNodeHost(creds)` from day one. No migration needed --
 the host pattern is the only path that exists for new consumers.
 
 ### Why this changed
 
-Lightning bolts (raindb-phoenix-lightning) run in goja sandboxes
-which do not have a Node runtime: no `globalThis.fetch`, no ability
-to load `openai-node`. The pre-v0.6 package required both, so
-bolts couldn't use it. The host abstraction lets bolts inject
-their own transport (goja `ctx.fetch` + a chat-completion adapter
-implemented per-consumer; reference TypeScript example in
-`fdn-app/bolt/server/services/agentHost.ts`) while Node consumers
-continue using `makeNodeHost` with no behavior change.
+RainDB Lightning bolts run in the bolt sandbox, which does not have
+a Node runtime: no `globalThis.fetch`, no ability to load
+`openai-node`. The pre-v0.6 package required both, so bolts couldn't
+use it. The host abstraction lets bolts inject their own transport
+(the bolt sandbox's `ctx.fetch` + a chat-completion adapter
+implemented per-consumer, wired up in your bolt's agent-host module)
+while Node consumers continue using `makeNodeHost` with no behavior
+change.
 
 The host implementation lives in the consumer, NOT in this package.
-Each consumer's runtime (Node `globalThis.fetch`, goja `ctx.fetch`,
-or a future runtime's equivalent) is the consumer's concern; this
-package's surface stays runtime-agnostic.
+Each consumer's runtime (Node `globalThis.fetch`, the bolt sandbox's
+`ctx.fetch`, or a future runtime's equivalent) is the consumer's
+concern; this package's surface stays runtime-agnostic.
 
-Two known consumers today: `fdn-app` (Node BFF) and the Lightning
-bolt port of fdn-app (goja sandbox). The package's surface accommodates
-both without runtime-specific branches in shared code.
+Two consumer shapes today: a host application's Node BFF and the
+Lightning bolt port of that same app (the bolt sandbox). The
+package's surface accommodates both without runtime-specific
+branches in shared code.
 
 ---
 
