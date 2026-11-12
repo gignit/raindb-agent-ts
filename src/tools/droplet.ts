@@ -330,14 +330,14 @@ export const droplet_read_latest: RegisteredTool = {
   name: 'droplet_read_latest',
   description:
     'Read the droplet indexed at (formation, index, value). Useful for '
-    + 'by-id-latest / by-email-latest style index lookups. Equivalent CLI: '
+    + 'by-id / by-email style index lookups. Equivalent CLI: '
     + 'raindb-cli droplet read-latest',
   minRole: 'read',
   parameters: {
     type: 'object',
     properties: {
       formation: { type: 'string' },
-      index: { type: 'string', description: 'Index name (e.g., by-id-latest)' },
+      index: { type: 'string', description: 'Index name (e.g., by-id)' },
       value: { type: 'string' },
     },
     required: ['formation', 'index', 'value'],
@@ -535,7 +535,7 @@ export const droplet_update: RegisteredTool = {
   name: 'droplet_update',
   description:
     "Read-modify-write a droplet with CAS retry. Pass a 'changes' object; "
-    + 'the fields are merged into the current payload under by-id-latest. '
+    + 'the fields are merged into the current payload under by-id. '
     + 'Equivalent CLI: raindb-cli droplet update',
   minRole: 'write',
   modifiesResource: true,
@@ -545,7 +545,7 @@ export const droplet_update: RegisteredTool = {
       formation: { type: 'string' },
       scope: {
         type: 'string',
-        description: 'Scope value identifying the entity (by-id-latest)',
+        description: 'Scope value identifying the entity (by-id)',
       },
       changes: {
         type: 'object',
@@ -567,14 +567,14 @@ export const droplet_update: RegisteredTool = {
     }
     const triggerFlows = boolArg(args, 'triggerFlows', true);
 
-    // Step 1: read current droplet via by-id-latest to grab the
+    // Step 1: read current droplet via by-id to grab the
     // pointerETag for CAS.
     const readResp = await executeGraphQL<{ readLatest: DropletResult | null }>(
       READ_LATEST_QUERY,
       {
         input: {
           formationId: formation,
-          indexId: 'by-id-latest',
+          indexId: 'by-id',
           scopeValue: scope,
         },
       },
@@ -762,7 +762,7 @@ export const droplet_bulk_update: RegisteredTool = {
       },
       index: {
         type: 'string',
-        description: 'Formation index for the RMW lookup (default by-id-latest)',
+        description: 'Formation index for the RMW lookup (default by-id)',
       },
       triggerFlows: {
         type: 'boolean',
@@ -781,7 +781,7 @@ export const droplet_bulk_update: RegisteredTool = {
     if (!Array.isArray(rawEntries)) {
       return { error: 'entries (array) required' };
     }
-    const index = stringArg(args, 'index') || 'by-id-latest';
+    const index = stringArg(args, 'index') || 'by-id';
     const triggerFlows = boolArg(args, 'triggerFlows', false);
     const updateArgs: ToolArgs = { formation, triggerFlows };
     const results: BulkDropletResult[] = [];

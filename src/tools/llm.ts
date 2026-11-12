@@ -61,14 +61,14 @@ interface ReadLatestPayloadResponse {
 
 /**
  * List all keys under `prefix` (paged), then derive the entity id
- * from each key + read the latest droplet through the by-id-latest
+ * from each key + read the latest droplet through the by-id
  * index. Returns the raw payloads (typed minimally; keeping it
  * loose here lets the model see the full shape).
  *
  * Pattern:
  *   keys = ListAllKeys(prefix=indexes/<formation>/by-id/)
  *   for each key matching .../by-id/<entityId>/latest.json:
- *     droplet = ReadLatest(formation, "by-id-latest", entityId)
+ *     droplet = ReadLatest(formation, "by-id", entityId)
  *     unmarshal(droplet.Payload)
  */
 async function listFormationEntities(
@@ -86,6 +86,7 @@ async function listFormationEntities(
       LIST_KEYS_QUERY,
       { input },
       creds,
+      host,
     );
     for (const k of data.listKeys.keys ?? []) allKeys.push(k.key);
     if (!data.listKeys.hasMore || !data.listKeys.nextCursor) break;
@@ -104,7 +105,11 @@ async function listFormationEntities(
     if (id) ids.add(id);
   }
 
+  // One unreadable entry is skipped so the rest of the registry stays
+  // visible; if EVERY read fails the list is not "empty", it is broken,
+  // so surface the first error instead of returning [].
   const out: Record<string, unknown>[] = [];
+  let firstError: unknown;
   for (const id of ids) {
     try {
       const data = await executeGraphQL<ReadLatestPayloadResponse>(
@@ -112,20 +117,20 @@ async function listFormationEntities(
         {
           input: {
             formationId,
-            indexId: 'by-id-latest',
+            indexId: 'by-id',
             scopeValue: id,
           },
         },
         creds,
+        host,
       );
       const payload = data.readLatest?.payload;
       if (payload) out.push(payload);
-    } catch {
-      // Skip individual read failures rather than aborting the
-      // whole list.
-      continue;
+    } catch (err) {
+      firstError ??= err;
     }
   }
+  if (out.length === 0 && firstError !== undefined) throw firstError;
   return out;
 }
 
@@ -184,7 +189,7 @@ export interface LLMUsageReportRow {
 
 const USAGE_DEDUP = `(
   SELECT *, ROW_NUMBER() OVER (PARTITION BY eventId ORDER BY ts DESC) AS rn
-  FROM entity."platform_usage_event"
+  FROM entity."platform-usage-event"
 ) sub`;
 
 export const llm_usage_report_summary: RegisteredTool = {

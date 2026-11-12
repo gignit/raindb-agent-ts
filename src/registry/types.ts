@@ -104,11 +104,11 @@ export interface ToolContext {
    *
    * From the agent tool's perspective the surface is plain HTTP GET.
    *
-   * Required when calling marketplace tools (pack_list,
-   * pack_info, pack_get, pack_features, vendor_list,
-   * vendor_info). Absence is an explicit error per the
-   * "no fallbacks" principle, not a silent fallback to a
-   * default URL. Hosts populate this per turn from their env.
+   * Optional. Used by the marketplace tools (pack_list, pack_info,
+   * pack_get, pack_features, vendor_list, vendor_info). When unset,
+   * they use the RainDB API origin derived from `creds.endpoint`,
+   * which serves the marketplace REST surface. Set it only when the
+   * marketplace is served from a different origin.
    */
   marketplaceBaseUrl?: string;
 }

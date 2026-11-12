@@ -9,6 +9,7 @@
 
 import OpenAI from 'openai';
 
+import { apiOriginFromEndpoint } from '../client/origin.js';
 import type { GraphQLOptions } from '../registry/types.js';
 import type {
   AgentHost,
@@ -88,11 +89,10 @@ export function makeNodeHost(creds: GraphQLOptions): AgentHost {
 
 /**
  * The RainDB API hosts both the GraphQL surface (`/graphql`) and the
- * openai-spec REST surface (`/v1/*`) on the same origin. Strip the
- * trailing `/graphql` and append `/v1`.
+ * openai-spec REST surface (`/v1/*`) on the same origin.
  */
 function deriveOpenAIBaseURL(graphqlEndpoint: string): string {
-  return graphqlEndpoint.replace(/\/graphql\/?$/, '') + '/v1';
+  return apiOriginFromEndpoint(graphqlEndpoint) + '/v1';
 }
 
 /**

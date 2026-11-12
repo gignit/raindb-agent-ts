@@ -89,7 +89,6 @@ const READ_LATEST_QUERY = `
   query ReadLatest($input: ReadLatestInput!) {
     readLatest(input: $input) {
       dropletId
-      scopeValue
       ts
       payload
     }
@@ -126,7 +125,7 @@ interface IndexPageArgs {
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-const DEFAULT_LOOKUP_INDEX = 'by-id-latest';
+const DEFAULT_LOOKUP_INDEX = 'by-id';
 
 function parseIndexPageArgs(args: ToolArgs): IndexPageArgs | string {
   const formationId = stringArg(args, 'formation');
@@ -260,7 +259,12 @@ export const index_page: RegisteredTool = {
     const pageScopeKeys = scopeKeys.slice(0, parsed.limit);
     const hasMore = scopeKeys.length > parsed.limit || truncated;
 
-    // Resolve each scope key via Tier 2 readLatest in parallel.
+    // Resolve each scope key via Tier 2 readLatest in parallel. One
+    // unreadable entry is skipped; if EVERY lookup fails, the page is
+    // not empty but unresolvable (typically a lookupIndex whose scope
+    // value differs from the listed index's last key segment), so the
+    // first error is returned instead of an empty page.
+    let firstError: string | undefined;
     const fetched = await Promise.all(
       pageScopeKeys.map(async (sk) => {
         try {
@@ -276,12 +280,20 @@ export const index_page: RegisteredTool = {
             ctx.creds,
             ctx.host,
           );
-          return data.readLatest;
-        } catch {
+          return data.readLatest ? { ...data.readLatest, scopeValue: sk } : null;
+        } catch (err) {
+          firstError ??= err instanceof Error ? err.message : String(err);
           return null;
         }
       }),
     );
+    if (pageScopeKeys.length > 0 && fetched.every((d) => !d) && firstError) {
+      return {
+        error: `index_page: could not resolve any of ${pageScopeKeys.length} keys via lookupIndex `
+          + `"${parsed.lookupIndex}": ${firstError}. Pass a lookupIndex whose scope value is the `
+          + `last segment of the "${parsed.indexName}" index keys.`,
+      };
+    }
 
     const items: Record<string, unknown>[] = [];
     for (const d of fetched) {

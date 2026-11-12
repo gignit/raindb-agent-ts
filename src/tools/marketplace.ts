@@ -5,8 +5,8 @@
 // marketplace service. These tools fetch from that REST surface
 // via a plain HTTP GET, with filters applied server-side.
 //
-// marketplaceBaseUrl is required when calling marketplace tools;
-// absence is an explicit error (no fallbacks). HTTP fetch is
+// The marketplace base URL is ctx.marketplaceBaseUrl when set, else
+// the origin of ctx.creds.endpoint (same API origin). HTTP fetch is
 // structurally simpler than threading per-tenant API keys +
 // listDroplets + projection mapping; same payload shape, one
 // round-trip per call.
@@ -18,6 +18,7 @@
 // (a substantial product feature scoped per-host).
 
 import { RaindbError } from '../client/graphql.js';
+import { apiOriginFromEndpoint } from '../client/origin.js';
 import { ensureHost } from '../registry/ensureHost.js';
 import {
   stringArg,
@@ -106,23 +107,31 @@ export interface VendorSummary {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the marketplace base URL from the tool context. Returns
- * either a normalized URL (trailing slash stripped) or an error
- * object the caller surfaces verbatim. Per the "no fallbacks"
- * principle: absence is an explicit error, never a default URL.
+ * Resolve the marketplace base URL. The marketplace REST surface is
+ * served by the RainDB API at the same origin as GraphQL, so the base
+ * is `ctx.marketplaceBaseUrl` when the host sets it (e.g. a separate
+ * marketplace deployment) and otherwise the origin of
+ * `ctx.creds.endpoint`. Returns an error object the caller surfaces
+ * verbatim when neither yields a URL.
  */
 function resolveMarketplaceBaseUrl(ctx: ToolContext): string | { error: string } {
   const raw = ctx.marketplaceBaseUrl;
-  if (!raw || typeof raw !== 'string' || raw.trim() === '') {
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    return raw.trim().replace(/\/+$/, '');
+  }
+  const endpoint = ctx.creds?.endpoint;
+  if (!endpoint) {
     return {
       error:
-        'marketplaceBaseUrl required on ToolContext. The shared package '
-        + 'does not read process.env directly; the host application must '
-        + 'populate it. Typically: ctx.marketplaceBaseUrl = '
-        + 'process.env.RAINDB_API_URL (default http://localhost:8080).',
+        'marketplace tools need ctx.creds.endpoint (the RainDB GraphQL URL) '
+        + 'or ctx.marketplaceBaseUrl to locate the marketplace API',
     };
   }
-  return raw.replace(/\/+$/, '');
+  try {
+    return apiOriginFromEndpoint(endpoint);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /**

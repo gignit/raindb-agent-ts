@@ -183,6 +183,7 @@ async function readRelay(
     READ_RELAY_QUERY,
     { input: inner },
     creds,
+    host,
   );
   return data.readRelay;
 }
@@ -394,7 +395,7 @@ export const relay_tree: RegisteredTool = {
 // relay_entity
 //
 // Walks listKeys against the relay base prefix
-// `relays/<formation>/<entityId>/` and projects each unique
+// `entities/<formation>/<entityId>/relays/` and projects each unique
 // relayId.
 // ---------------------------------------------------------------------------
 
@@ -418,7 +419,7 @@ export const relay_entity: RegisteredTool = {
     if (!formation || !entityId) {
       return { error: 'formation and entityId required' };
     }
-    const prefix = `relays/${formation}/${entityId}/`;
+    const prefix = `entities/${formation}/${entityId}/relays/`;
     const seen = new Set<string>();
     const ids: string[] = [];
     let cursor: string | undefined;
@@ -433,7 +434,7 @@ export const relay_entity: RegisteredTool = {
         };
       }>(LIST_KEYS_QUERY, { input }, ctx.creds, ctx.host);
       for (const k of data.listKeys.keys ?? []) {
-        // Path layout: relays/<formation>/<entityId>/<relayId>/...
+        // Path layout: entities/<formation>/<entityId>/relays/<relayId>/...
         // The relayId is the segment immediately after entityId.
         const trimmed = k.key.startsWith(prefix)
           ? k.key.slice(prefix.length)

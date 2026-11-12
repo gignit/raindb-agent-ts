@@ -4,6 +4,42 @@ All notable changes to `@raindb/agent` are documented here. The
 package follows semver post-1.0; pre-1.0 minor bumps may include
 breaking changes (rare, called out explicitly).
 
+## 0.8.1 -- tool fixes against the live RainDB API
+
+Every read-only tool was exercised against a live tenant; these were
+returning empty or wrong results.
+
+### Fixed
+
+- **SQL rows.** `SQLResult.rows` is a list of objects keyed by column.
+  `executeSQL` decoded every row to `[]`; it now projects each row in
+  `columns` order (nested values JSON-encoded) and fails loudly on any
+  other row shape. Affects `sql_execute`, `usage_*` and
+  `llm_usage_report_summary`.
+- **Index name `by-id-latest`.** Formations declare `by-id`; the API
+  rejects `by-id-latest`. `droplet_update`, `droplet_bulk_update`,
+  `llm_model_list`, `llm_provider_list` and `index_page` used it.
+- **`index_page`** selected `Droplet.scopeValue`, which does not exist,
+  so every lookup failed and the page was always empty. It now returns
+  an error when no key on a page resolves instead of an empty page.
+- **Relay layout.** `relay_entity`, `digest_list` and `digest_show`
+  listed `relays/<formation>/<entity>/`; relays live under
+  `entities/<formation>/<entity>/relays/`.
+- **Usage table.** `usage_*` and `llm_usage_report_summary` queried
+  `entity."platform_usage_event"`; the table is
+  `entity."platform-usage-event"`.
+- **Host transport.** `llm_*`, `digest_*` and `relay_*` made some
+  GraphQL calls without the injected host, which fails inside a bolt.
+- **`llm_model_list` / `llm_provider_list`** return the first error when
+  every entry fails to read, instead of an empty list.
+
+### Changed
+
+- **Marketplace tools** no longer require `ctx.marketplaceBaseUrl`; they
+  use the API origin of `ctx.creds.endpoint`, which serves
+  `/api/marketplace/*`. Set `marketplaceBaseUrl` only for a separate
+  marketplace origin.
+
 ## 0.8.0 -- RainDB wire reconciliation
 
 Reconciliation against the current RainDB GraphQL surface. The full

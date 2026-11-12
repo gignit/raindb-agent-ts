@@ -294,9 +294,9 @@ test('relay_entity: dedupes relayIds across listKeys pages', async () => {
         data: {
           listKeys: {
             keys: [
-              { key: 'relays/fdn_documents/doc-1/relay-A/details.json' },
-              { key: 'relays/fdn_documents/doc-1/relay-A/log-1.json' },
-              { key: 'relays/fdn_documents/doc-1/relay-B/details.json' },
+              { key: 'entities/fdn_documents/doc-1/relays/relay-A/details.json' },
+              { key: 'entities/fdn_documents/doc-1/relays/relay-A/log-1.json' },
+              { key: 'entities/fdn_documents/doc-1/relays/relay-B/details.json' },
             ],
             nextCursor: null,
             hasMore: false,
@@ -362,7 +362,7 @@ test('digest_list: walks formation -> entities -> relay roots -> tree', async ()
       {
         data: {
           listKeys: {
-            keys: [{ key: 'relays/fdn_documents/doc-1/r-root/details.json' }],
+            keys: [{ key: 'entities/fdn_documents/doc-1/relays/r-root/details.json' }],
             nextCursor: null,
             hasMore: false,
           },
@@ -461,7 +461,7 @@ test('digest_show: returns single status synthesized for the entity', async () =
       {
         data: {
           listKeys: {
-            keys: [{ key: 'relays/fdn_documents/doc-1/r-root/details.json' }],
+            keys: [{ key: 'entities/fdn_documents/doc-1/relays/r-root/details.json' }],
             nextCursor: null,
             hasMore: false,
           },

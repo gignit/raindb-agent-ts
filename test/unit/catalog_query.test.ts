@@ -261,7 +261,9 @@ test('sql_execute: accepts SELECT through executeSQL', async () => {
       data: {
         executeSQL: {
           columns: ['c'],
-          rows: [['1']],
+          rows: [
+            { c: '1' },
+          ],
           rowCount: 1,
           durationMs: 5,
         },
@@ -456,4 +458,42 @@ test('query tools: metadata matches the tenant tool spec', () => {
 
   assert.equal(vector_search.minRole, 'read');
   assert.deepEqual(vector_search.parameters.required, ['formation', 'model', 'query']);
+});
+
+test('executeSQL: object rows are projected in column order; nested values are JSON-encoded', async () => {
+  const recorder: FetchCallRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = mockFetch(
+    {
+      data: {
+        executeSQL: {
+          columns: ['n', 'd', 'meta', 'missing'],
+          rows: [{ d: 'doc-1', n: 144, meta: { a: [1, 2] } }],
+          rowCount: 1,
+          durationMs: 3,
+        },
+      },
+    },
+    recorder,
+  );
+  try {
+    const r = (await sql_execute.execute(ctx(), { query: 'SELECT 1' })) as { rows: string[][] };
+    assert.deepEqual(r.rows, [['144', 'doc-1', '{"a":[1,2]}', '']]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('executeSQL: a row that is not an object fails loudly', async () => {
+  const recorder: FetchCallRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = mockFetch(
+    { data: { executeSQL: { columns: ['c'], rows: [['1']], rowCount: 1, durationMs: 1 } } },
+    recorder,
+  );
+  try {
+    await assert.rejects(sql_execute.execute(ctx(), { query: 'SELECT 1' }), /not an object keyed by column/);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

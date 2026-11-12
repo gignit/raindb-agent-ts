@@ -166,22 +166,41 @@ test('pack_list: empty response envelope returns []', async () => {
   }
 });
 
-test('pack_list: missing marketplaceBaseUrl returns explicit error (no fallback)', async () => {
+test('pack_list: without marketplaceBaseUrl uses the API origin of creds.endpoint', async () => {
   const recorder: FetchCallRecord[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = mockFetch({ tagline: '', packs: [] }, recorder);
 
   try {
     const noMarketCtx: ToolContext = {
-      creds: { apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' },
-      host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'http://localhost:8080/graphql' }),
+      creds: { apiKey: 'rdb_test', endpoint: 'https://api.example.test/graphql' },
+      host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'https://api.example.test/graphql' }),
       role: 'read',
       // marketplaceBaseUrl deliberately omitted
     };
-    const result = await pack_list.execute(noMarketCtx, {});
+    await pack_list.execute(noMarketCtx, {});
+    assert.equal(recorder[0]!.url, 'https://api.example.test/api/marketplace/packs');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('pack_list: endpoint that is not a /graphql URL returns an explicit error', async () => {
+  const recorder: FetchCallRecord[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = mockFetch({ tagline: '', packs: [] }, recorder);
+
+  try {
+    const badCtx: ToolContext = {
+      creds: { apiKey: 'rdb_test', endpoint: 'https://api.example.test/graphql' },
+      host: makeNodeHost({ apiKey: 'rdb_test', endpoint: 'https://api.example.test/graphql' }),
+      role: 'read',
+    };
+    badCtx.creds = { apiKey: 'rdb_test', endpoint: 'https://api.example.test/other' };
+    const result = await pack_list.execute(badCtx, {});
     assert.ok(result && typeof result === 'object' && 'error' in result);
-    assert.match((result as { error: string }).error, /marketplaceBaseUrl required/);
-    assert.equal(recorder.length, 0, 'no fetch call when context invalid');
+    assert.match((result as { error: string }).error, /expected a GraphQL URL ending in \/graphql/);
+    assert.equal(recorder.length, 0, 'no fetch call when the origin cannot be derived');
   } finally {
     globalThis.fetch = original;
   }

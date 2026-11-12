@@ -164,11 +164,11 @@ test('droplet_read_latest: emits readLatest query', async () => {
   try {
     await droplet_read_latest.execute(ctx(), {
       formation: 'widget',
-      index: 'by-id-latest',
+      index: 'by-id',
       value: 'abc',
     });
     const input = recorder[0]!.body.variables['input'] as Record<string, unknown>;
-    assert.equal(input['indexId'], 'by-id-latest');
+    assert.equal(input['indexId'], 'by-id');
     assert.equal(input['scopeValue'], 'abc');
   } finally {
     globalThis.fetch = original;
@@ -186,10 +186,10 @@ test('droplet_read_latest: 404 surfaces as error', async () => {
   try {
     const r = await droplet_read_latest.execute(ctx(), {
       formation: 'widget',
-      index: 'by-id-latest',
+      index: 'by-id',
       value: 'missing',
     });
-    assert.deepEqual(r, { error: 'droplet not found: widget/by-id-latest/missing' });
+    assert.deepEqual(r, { error: 'droplet not found: widget/by-id/missing' });
   } finally {
     globalThis.fetch = original;
   }

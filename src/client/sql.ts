@@ -6,7 +6,7 @@
 // Keeps the same wire shape so a query that runs through raindb-cli's
 // `raindb-cli sql` runs identically through this surface.
 
-import { executeGraphQL } from './graphql.js';
+import { executeGraphQL, RaindbError } from './graphql.js';
 import type { AgentHost } from '../host/types.js';
 import type { GraphQLOptions } from '../registry/types.js';
 
@@ -62,7 +62,7 @@ export interface SQLResult {
 interface ExecuteSQLResponse {
   executeSQL: {
     columns: string[];
-    rows: unknown[][] | string[][] | string[];
+    rows: unknown[];
     rowCount: number;
     durationMs: number;
     truncated?: boolean;
@@ -141,31 +141,20 @@ export async function executeSQL(
     creds,
     host,
   );
-  // The RainDB API returns rows as JSON-encoded string arrays per row
-  // when the GraphQL surface marshals the SQLResult value list.
-  // Normalize to string[][].
-  const rows: string[][] = (data.executeSQL.rows ?? []).map((row) => {
-    if (Array.isArray(row)) {
-      return (row as unknown[]).map((cell) =>
-        cell === null || cell === undefined ? '' : String(cell),
+  // SQLResult.rows is [JSON!]!: each row is an object keyed by column
+  // name. Project it to string[] in `columns` order so callers can
+  // index cells positionally (see sqlRowToColumns). A row of any other
+  // shape is a wire-contract violation and fails loudly instead of
+  // silently decoding to an empty row.
+  const columns = data.executeSQL.columns;
+  const rows: string[][] = (data.executeSQL.rows ?? []).map((row, i) => {
+    if (row === null || typeof row !== 'object' || Array.isArray(row)) {
+      throw new RaindbError(
+        `executeSQL: row ${i} is not an object keyed by column (got ${Array.isArray(row) ? 'array' : typeof row})`,
       );
     }
-    if (typeof row === 'string') {
-      // Defensive: GraphQL JSON scalar may serialize each row as
-      // a JSON string. Parse + project.
-      try {
-        const parsed = JSON.parse(row);
-        if (Array.isArray(parsed)) {
-          return parsed.map((cell) =>
-            cell === null || cell === undefined ? '' : String(cell),
-          );
-        }
-      } catch {
-        // fall through; treat as single-cell row.
-      }
-      return [row];
-    }
-    return [];
+    const obj = row as Record<string, unknown>;
+    return columns.map((col) => cellToString(obj[col]));
   });
   const result: SQLResult = {
     columns: data.executeSQL.columns,
@@ -180,6 +169,16 @@ export async function executeSQL(
     result.latest = data.executeSQL.latest;
   }
   return result;
+}
+
+/**
+ * Render one SQL cell as a string: null/undefined become '', nested
+ * values (structs, lists) are JSON-encoded so no data is lost.
+ */
+function cellToString(cell: unknown): string {
+  if (cell === null || cell === undefined) return '';
+  if (typeof cell === 'object') return JSON.stringify(cell);
+  return String(cell);
 }
 
 /**

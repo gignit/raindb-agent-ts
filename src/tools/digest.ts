@@ -157,6 +157,7 @@ async function listEntityIds(
     LIST_DROPLETS_QUERY,
     { input: { formationId: formation, pageSize: 200 } },
     creds,
+    host,
   );
   const ids: string[] = [];
   const seen = new Set<string>();
@@ -176,9 +177,9 @@ async function listRootRelayIds(
   creds: { apiKey?: string; endpoint?: string },
   host: import('../host/types.js').AgentHost | undefined,
 ): Promise<string[]> {
-  // List keys under relays/<formation>/<entityId>/, project unique
+  // List keys under entities/<formation>/<entityId>/relays/, project unique
   // relayIds (the segment after entityId).
-  const prefix = `relays/${formation}/${entityId}/`;
+  const prefix = `entities/${formation}/${entityId}/relays/`;
   const seen = new Set<string>();
   const ids: string[] = [];
   let cursor: string | undefined;
@@ -231,6 +232,7 @@ async function readRelayTree(
       },
     },
     creds,
+    host,
   );
   return data.readRelay;
 }

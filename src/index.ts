@@ -11,7 +11,7 @@
  * not exported -- they can iterate freely between releases.
  */
 
-export const VERSION = '0.8.0';
+export const VERSION = '0.8.1';
 
 // === Agent runtime ===
 export { runAgent } from './loop/index.js';

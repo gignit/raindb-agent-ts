@@ -71,7 +71,7 @@ test('usage_list: emits executeSQL with formationId scope', async () => {
         executeSQL: {
           columns: ['timestamp', 'service', 'dimension', 'quantity', 'unit', 'model'],
           rows: [
-            ['2026-05-09T00:00:00Z', 'llm', 'tokens', '1000', 'tokens', 'gpt-4o'],
+            { timestamp: '2026-05-09T00:00:00Z', service: 'llm', dimension: 'tokens', quantity: '1000', unit: 'tokens', model: 'gpt-4o' },
           ],
           rowCount: 1,
           durationMs: 12,
@@ -130,7 +130,7 @@ test('usage_summary: emits executeSQL with GROUP BY service+dimension', async ()
         executeSQL: {
           columns: ['service', 'dimension', 'unit', 'events', 'total', 'first_event', 'last_event'],
           rows: [
-            ['llm', 'tokens', 'tokens', '100', '50000', '2026-04-01', '2026-05-01'],
+            { service: 'llm', dimension: 'tokens', unit: 'tokens', events: '100', total: '50000', first_event: '2026-04-01', last_event: '2026-05-01' },
           ],
           rowCount: 1,
           durationMs: 8,
@@ -284,7 +284,7 @@ test('llm_usage_report_summary: SQL has GROUP BY date/model/provider/dimension',
         executeSQL: {
           columns: ['date', 'model', 'provider', 'dimension', 'requests', 'total_tokens', 'platform_cost', 'vendor_cost'],
           rows: [
-            ['2026-05-01', 'gpt-4o', 'openai', 'tokens', '50', '50000', '0.5', '0.3'],
+            { date: '2026-05-01', model: 'gpt-4o', provider: 'openai', dimension: 'tokens', requests: '50', total_tokens: '50000', platform_cost: '0.5', vendor_cost: '0.3' },
           ],
           rowCount: 1,
           durationMs: 10,

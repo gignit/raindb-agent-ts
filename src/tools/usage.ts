@@ -35,7 +35,7 @@ export interface UsageSummaryRow {
 // duplicate events kept around from idempotent retries.
 const USAGE_DEDUP = `(
   SELECT *, ROW_NUMBER() OVER (PARTITION BY eventId ORDER BY ts DESC) AS rn
-  FROM entity."platform_usage_event"
+  FROM entity."platform-usage-event"
 ) sub`;
 
 // validateUsageIdent guards SQL identifiers passed in the WHERE

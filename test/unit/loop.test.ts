@@ -301,3 +301,54 @@ test('runAgent: confirm denies a modifiesResource tool', async () => {
     globalThis.fetch = original;
   }
 });
+
+function finalReply(content: string): Record<string, unknown> {
+  return {
+    id: 'chatcmpl-model',
+    object: 'chat.completion',
+    created: Date.now() / 1000,
+    model: 'echo',
+    choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
+  };
+}
+
+test('runAgent: an explicit model is sent as-is and the registry is never queried', async () => {
+  _resetDefaultModelCache();
+  const recorder: MockedCall[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = setupMocks({ openAiResponses: [finalReply('ok')], recorder });
+  try {
+    await runAgent({
+      systemPrompt: 's',
+      userPrompt: 'u',
+      ctx: ctx(),
+      model: 'fdn-internal/sonnet-4.6',
+    });
+    assert.equal(recorder.filter((r) => r.kind === 'graphql').length, 0, 'no llmRegistry lookup');
+    const chat = recorder.filter((r) => r.kind === 'openai-chat');
+    assert.equal(chat.length, 1);
+    assert.equal(chat[0]!.body['model'], 'fdn-internal/sonnet-4.6');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('runAgent: without a model it sends the registry chat default', async () => {
+  _resetDefaultModelCache();
+  const recorder: MockedCall[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = setupMocks({
+    openAiResponses: [finalReply('ok')],
+    llmRegistryResponse: {
+      data: { llmRegistry: { defaults: [{ capability: 'chat', modelId: 'fdn-internal/nova-lite' }] } },
+    },
+    recorder,
+  });
+  try {
+    await runAgent({ systemPrompt: 's', userPrompt: 'u', ctx: ctx() });
+    const chat = recorder.filter((r) => r.kind === 'openai-chat');
+    assert.equal(chat[0]!.body['model'], 'fdn-internal/nova-lite');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
